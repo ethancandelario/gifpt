@@ -391,14 +391,14 @@ function buildFFMPEGCommand(ffmpegPath, inputFiles, outputDirectory, config) {
         outputFilePath = "\"" + outputFilePath + "\"";
 
         if (config.gifPaletteGen === 'true') {
-            var paletteGenCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -vf \"palettegen=max_colors=" + numColors + "\" " + palettePath + " -update 1";
-            var paletteUseCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -i " + palettePath + " -filter_complex \"[0:v]" + playbackSpeed + ",fps=" + config.gifFps + ",scale=" + config.gifScale + " [x];[x][1:v] paletteuse\" -loop " + config.gifLoopCount + " -compression_level " + config.gifCompressionLevel + " " + outputFilePath + " " + duration;
+            var paletteGenCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -vf \"palettegen=max_colors=" + numColors + "\" " + palettePath;
+            var paletteUseCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -i " + palettePath + " -filter_complex \"[0:v]" + playbackSpeed + ",fps=" + config.gifFps + ",scale=" + config.gifScale + " [x];[x][1:v] paletteuse\" -loop " + config.gifLoopCount + " " + outputFilePath + " " + duration;
 
             commands.push(paletteGenCmd);
             commands.push(paletteUseCmd);
         } else {
             var filter = "fps=" + config.gifFps + ",scale=" + config.gifScale + ",split[x][z];[z]palettegen=max_colors=" + numColors + "[p];[x][p]paletteuse";
-            var command = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -vf \"" + playbackSpeed + "," + filter + "\" -loop " + config.gifLoopCount + " -compression_level " + config.gifCompressionLevel + " " + outputFilePath + " " + duration;
+            var command = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -vf \"" + playbackSpeed + "," + filter + "\" -loop " + config.gifLoopCount + " " + outputFilePath + " " + duration;
             commands.push(command);
         }
     }
@@ -422,13 +422,39 @@ function executeFFMPEGCommand(commands, inputFiles, config) {
     }
 
     // Create a log for each processed video, and for the FFMPEG results.
-    if(GENERATE_REPORT){
-
+    if (GENERATE_REPORT) {
         logMessage(loggedFFMPEGCommands, SCRIPT_NAME, config);
-
         for (var i = 0; i < inputFiles.length; i++) {
             logMessage(commands[i], inputFiles[i], config);
         }
+    }
+}
+
+/**
+ * Optimizes the output GIFs using Gifsicle.
+ * @param {string} gifsiclePath - The path to the Gifsicle executable.
+ * @param {string} outputDirectory - The directory where the output GIFs are saved.
+ * @param {Array} inputFiles - The original video files that were converted to GIFs.
+ * @param {object} config - User-configured settings.
+ */
+function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
+    var loggedGifsicleCommands = "";
+
+    for (var i = 0; i < inputFiles.length; i++) {
+        var inputFile = inputFiles[i];
+        var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), "_optimized.gif"));
+        var inputFilePath = "\"" + outputDirectory + "/" + replaceFileExtension(new File(inputFile), ".gif") + "\"";
+        var outputFilePath = "\"" + outputDirectory + "/" + outputFileName + "\"";
+
+        var gifsicleCommand = gifsiclePath + " -O3 " + inputFilePath + " --lossy=" + config.lossyLevel + " --dither=" + config.ditheringMethod + " -o " + outputFilePath;
+
+        var result = system.callSystem(gifsicleCommand);
+        loggedGifsicleCommands += result;
+
+    }
+
+    if (GENERATE_REPORT) {
+        logMessage(loggedGifsicleCommands, inputFile, config);
     }
 }
 
@@ -444,6 +470,11 @@ function main() {
         'ffmpegPath': {
             type: 'path',
             description: 'Locate the path to the FFMPEG executable.',
+            writeToConfig: true
+        },
+        'gifsiclePath': {
+            type: 'path',
+            description: 'Locate the path to the gifsicle executable.',
             writeToConfig: true
         },
         'gifScale': {
@@ -470,12 +501,6 @@ function main() {
             description: 'Whether to generate a custom color palette for each GIF. True enhances color quality, especially for complex videos.\n\nFalse uses a standard palette, which may reduce quality but speeds up processing.',
             writeToConfig: SAVE_SETTINGS
         },
-        'gifCompressionLevel': {
-            type: 'text',
-            'default': '0',
-            description: 'GIF compression level from 0 (no compression, high quality, large file size) to 100 (maximum compression, lower quality, smaller file size).\n\nAdjust according to the desired balance between image quality and file size.',
-            writeToConfig: SAVE_SETTINGS
-        },
         'gifLoopCount': {
             type: 'text',
             'default': '0',
@@ -500,6 +525,18 @@ function main() {
             description: 'Duration (in seconds) of the video clip to convert into a GIF.\n\nLeave blank to convert the entire video.',
             writeToConfig: SAVE_SETTINGS
         },
+        'lossyLevel': {
+            type: 'text',
+            'default': '80',
+            description: 'Level of lossy compression for Gifsicle. Values can be set from 0 to 100.',
+            writeToConfig: SAVE_SETTINGS
+        },
+        'ditheringMethod': {
+            type: 'text',
+            'default': 'ordered',
+            description: 'Dithering method for Gifsicle. Options: ordered, floyd-steinberg, ro64, o3, o4, o8, halftone',
+            writeToConfig: SAVE_SETTINGS
+        }
     };
 
     var configFilePath = File($.fileName).path + "/config.csv";
@@ -534,6 +571,9 @@ function main() {
             paletteFile.remove();
         }
     }
+
+    // Optimize the output GIFs
+    optimizeGIFs(config.gifsiclePath, outputDirectory, inputFiles, config);
 
     alert(successText() + " Video conversion to GIFs completed in " + durationMinutes + " minutes and " + durationSeconds.toFixed(2) + " seconds.", successText());
 }
