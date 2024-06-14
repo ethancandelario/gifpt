@@ -1,6 +1,7 @@
 // Parameters
 var GENERATE_REPORT = true;
 var SAVE_SETTINGS = false;
+var SCRIPT_NAME = "gifpt";
 
 /**
  * Returns a randomized exclamation.
@@ -58,6 +59,21 @@ function cleanString(str) {
         return str.replace(/^\s+|\s+$/g, '');  // Regex to remove leading and trailing whitespace
     }
     return '';
+}
+
+/**
+ * Replaces the file extension of a given file path with a new extension.
+ * @param {File} filePath - The file whose extension is to be replaced.
+ * @param {string} newExtension - The new file extension to apply.
+ * @returns {string} - The file name with the new extension.
+ */
+function replaceFileExtension(filePath, newExtension) {
+    var fileName = filePath.name;
+    var dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex > -1) {
+        fileName = fileName.substring(0, dotIndex);
+    }
+    return fileName + newExtension;
 }
 
 /**
@@ -175,17 +191,19 @@ function createPromptWindow(title, message, choices, defaultValue) {
 }
 
 /**
- * Logs a message to a log file, with a timestamp and the name of the associated file.
+ * Logs a message to a log file, with a timestamp, the name of the associated file, and appends the config content.
  * @param {string} message - The message to log.
- * @param {string} outputFile - The path to the output file associated with the log.
+ * @param {string} logFileName - A string to label the log with.
+ * @param {object} config - The configuration settings to append.
  */
-function logMessage(message, outputFile) {
-    var outputFileName = extractFileName(outputFile);
+function logMessage(message, logFileName, config) {
+
+    var outputFileName = extractFileName(logFileName);
+
     var timestamp = getFormattedTimestamp();
     var scriptPath = File($.fileName).path;
     var logFolderPath = scriptPath + "/log";
     var logFilePath = logFolderPath + "/" + outputFileName + "_" + timestamp + "_log.txt";
-
     var logFolder = new Folder(logFolderPath);
 
     // Create the log folder if it doesn't exist
@@ -198,14 +216,16 @@ function logMessage(message, outputFile) {
 
     var logFile = new File(logFilePath);
 
-    // Open the file in write mode and log the message
     if (logFile.open('w')) {
+        var configContent = JSON.stringify(config, null, 4);
+        logFile.writeln("Configuration Settings:\n" + configContent + "\n\nLogged Messages:");
         logFile.writeln(message);
         logFile.close();
     } else {
         alert("Failed to open log file for writing: " + logFilePath, errorText());
     }
 }
+
 
 /**
  * Initializes the configuration by loading existing settings or prompting the user for new ones.
@@ -347,35 +367,6 @@ function promptForOutputDirectory() {
 }
 
 /**
- * Executes the provided FFMPEG commands.
- * @param {Array} commands - The FFMPEG commands to execute.
- */
-function executeFFMPEGCommand(commands, inputFiles) {
-    for (var i = 0; i < commands.length; i++) {
-        var command = commands[i];
-        var result = system.callSystem(command);
-        if (result && GENERATE_REPORT) {
-            logMessage(result, inputFiles[i]);
-        }
-    }
-}
-
-/**
- * Replaces the file extension of a given file path with a new extension.
- * @param {File} filePath - The file whose extension is to be replaced.
- * @param {string} newExtension - The new file extension to apply.
- * @returns {string} - The file name with the new extension.
- */
-function replaceFileExtension(filePath, newExtension) {
-    var fileName = filePath.name;
-    var dotIndex = fileName.lastIndexOf('.');
-    if (dotIndex > -1) {
-        fileName = fileName.substring(0, dotIndex);
-    }
-    return fileName + newExtension;
-}
-
-/**
  * Builds FFMPEG command lines for converting videos to GIFs based on user config.
  * @param {string} ffmpegPath - The path to the FFMPEG executable.
  * @param {Array} inputFiles - The input video files.
@@ -414,6 +405,32 @@ function buildFFMPEGCommand(ffmpegPath, inputFiles, outputDirectory, config) {
     return commands;
 }
 
+/**
+ * Executes the provided FFMPEG commands.
+ * @param {Array} commands - The FFMPEG commands to execute.
+ * @param {Array} videoInput - The original video files to be converted.
+ * @param {Array} config - The conversion settings, defined by the user.
+ */
+function executeFFMPEGCommand(commands, inputFiles, config) {
+    var loggedFFMPEGCommands = "";
+
+    // Execute each command.
+    for (var i = 0; i < commands.length; i++) {
+        var command = commands[i];
+        var result = system.callSystem(command);
+        loggedFFMPEGCommands += result;
+    }
+
+    // Create a log for each processed video, and for the FFMPEG results.
+    if(GENERATE_REPORT){
+
+        logMessage(loggedFFMPEGCommands, SCRIPT_NAME, config);
+
+        for (var i = 0; i < inputFiles.length; i++) {
+            logMessage(commands[i], inputFiles[i], config);
+        }
+    }
+}
 
 /**
  * Main function to handle user interactions and processing.
@@ -502,16 +519,15 @@ function main() {
     }
 
     var inputFiles = videoInput instanceof Array ? videoInput : [videoInput];
+
     var commands = buildFFMPEGCommand(config.ffmpegPath, inputFiles, outputDirectory, config);
-    executeFFMPEGCommand(commands, inputFiles);
+    executeFFMPEGCommand(commands, inputFiles, config);
 
     var endTime = new Date().getTime();
-
     var totalDuration = (endTime - startTime) / 1000;
     var durationMinutes = Math.floor(totalDuration / 60);
     var durationSeconds = totalDuration % 60;
 
-    // Cleanup step to remove the palette.png if it exists
     if (config.gifPaletteGen === 'true') {
         var paletteFile = new File(outputDirectory + "/palette.png");
         if (paletteFile.exists) {
