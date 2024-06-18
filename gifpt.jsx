@@ -1,7 +1,9 @@
 // Parameters
 var GENERATE_REPORT = true;
-var SAVE_SETTINGS = false;
+var SAVE_SETTINGS = true;
 var SCRIPT_NAME = "gifpt";
+
+var LAST_UPDATED = "24.06.18";
 
 /**
  * Returns a randomized exclamation.
@@ -139,7 +141,6 @@ function createPromptWindow(title, message, choices, defaultValue) {
     win.spacing = 10;
     win.margins = 25;
 
-    // Event handler for resizing the window
     win.onResize = function () {
         this.layout.resize();
     };
@@ -226,81 +227,6 @@ function logMessage(message, logFileName, config) {
     }
 }
 
-
-/**
- * Initializes the configuration by loading existing settings or prompting the user for new ones.
- * @param {string} filePath - The path to the configuration file.
- * @param {object} configDefinitions - Definitions of config settings including type, default values, and descriptions.
- * @returns {object|null} - The initialized configuration or null if critical config is missing.
- */
-function initializeConfig(filePath, configDefinitions) {
-    var config = loadConfig(filePath);
-    var changesMade = false;
-
-    for (var key in configDefinitions) {
-        if (!config[key]) {
-            var valueType = configDefinitions[key].type;
-            var defaultValue = configDefinitions[key]['default'] || '';
-            var description = configDefinitions[key].description;
-            var userValue = promptForValue(key, valueType, defaultValue, description);
-            if (userValue !== null) {
-                config[key] = userValue;
-                changesMade = true;
-            } else {
-                alert(key + " is required to proceed.", errorText());
-                return null;  // Early exit if critical config is missing
-            }
-        }
-    }
-
-    if (changesMade) {
-        saveConfig(filePath, config, configDefinitions);
-    }
-
-    return config;
-}
-
-/**
- * Loads configuration settings from a given file.
- * @param {string} filePath - The path to the configuration file.
- * @returns {object} - The loaded configuration.
- */
-function loadConfig(filePath) {
-    var configFile = new File(filePath);
-    var config = {};
-    if (configFile.exists) {
-        configFile.open('r');
-        while (!configFile.eof) {
-            var line = configFile.readln();
-            var parts = line.split(',');
-            if (parts.length == 2) {
-                var key = cleanString(parts[0]);
-                var value = cleanString(parts[1]);
-                config[key] = value;
-            }
-        }
-        configFile.close();
-    }
-    return config;
-}
-
-/**
- * Saves configuration settings to a file.
- * @param {string} filePath - The path to the configuration file.
- * @param {object} config - The configuration settings to save.
- * @param {object} configDefinitions - Definitions of config settings including writeToConfig field.
- */
-function saveConfig(filePath, config, configDefinitions) {
-    var configFile = new File(filePath);
-    configFile.open('w');
-    for (var key in config) {
-        if (config.hasOwnProperty(key) && configDefinitions[key].writeToConfig) {
-            configFile.writeln(key + ',' + config[key]);
-        }
-    }
-    configFile.close();
-}
-
 /**
  * Prompts the user for a value for a given configuration key, using a custom dialog window.
  * @param {string} key - The configuration key.
@@ -367,6 +293,38 @@ function promptForOutputDirectory() {
 }
 
 /**
+ * Optimizes the output GIFs using Gifsicle.
+ * @param {string} gifsiclePath - The path to the Gifsicle executable.
+ * @param {string} outputDirectory - The directory where the output GIFs are saved.
+ * @param {Array} inputFiles - The original video files that were converted to GIFs.
+ * @param {object} config - User-configured settings.
+ */
+function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
+    var userSelection = createPromptWindow("Setup: Optimization", "Attempt to optimize GIFS?\n", ["Yes", "No"], null);
+    var loggedGifsicleCommands = "";
+
+    if (userSelection !== "Yes") {
+        return;
+    }
+
+    for (var i = 0; i < inputFiles.length; i++) {
+        var inputFile = inputFiles[i];
+        var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), "_optimized.gif"));
+        var inputFilePath = "\"" + outputDirectory + "/" + decodeURIComponent(replaceFileExtension(new File(inputFile), ".gif")) + "\"";
+        var outputFilePath = "\"" + outputDirectory + "/" + outputFileName + "\"";
+
+        var gifsicleCommand = gifsiclePath + " -O3 " + inputFilePath + " --lossy=" + config.lossyLevel + " --dither=" + config.ditheringMethod + " -o " + outputFilePath;
+
+        var result = system.callSystem(gifsicleCommand);
+        loggedGifsicleCommands += "\n" + gifsicleCommand + "\n";
+    }
+
+    if (GENERATE_REPORT) {
+        logMessage(loggedGifsicleCommands, SCRIPT_NAME + "_optimized", config);
+    }
+}
+
+/**
  * Builds FFMPEG command lines for converting videos to GIFs based on user config.
  * @param {string} ffmpegPath - The path to the FFMPEG executable.
  * @param {Array} inputFiles - The input video files.
@@ -418,7 +376,7 @@ function executeFFMPEGCommand(commands, inputFiles, config) {
     for (var i = 0; i < commands.length; i++) {
         var command = commands[i];
         var result = system.callSystem(command);
-        loggedFFMPEGCommands += result;
+        loggedFFMPEGCommands += "\n" + result + "\n";
     }
 
     // Create a log for each processed video, and for the FFMPEG results.
@@ -431,30 +389,95 @@ function executeFFMPEGCommand(commands, inputFiles, config) {
 }
 
 /**
- * Optimizes the output GIFs using Gifsicle.
- * @param {string} gifsiclePath - The path to the Gifsicle executable.
- * @param {string} outputDirectory - The directory where the output GIFs are saved.
- * @param {Array} inputFiles - The original video files that were converted to GIFs.
- * @param {object} config - User-configured settings.
+ * Initializes the configuration by loading existing settings or prompting the user for new ones.
+ * @param {string} filePath - The path to the configuration file.
+ * @param {object} configDefinitions - Definitions of config settings including type, default values, descriptions, and allowBlank.
+ * @returns {object|null} - The initialized configuration or null if critical config is missing.
  */
-function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
-    var loggedGifsicleCommands = "";
+function initializeConfig(filePath, configDefinitions) {
+    var config = loadConfig(filePath);
+    var changesMade = false;
 
-    for (var i = 0; i < inputFiles.length; i++) {
-        var inputFile = inputFiles[i];
-        var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), "_optimized.gif"));
-        var inputFilePath = "\"" + outputDirectory + "/" + replaceFileExtension(new File(inputFile), ".gif") + "\"";
-        var outputFilePath = "\"" + outputDirectory + "/" + outputFileName + "\"";
-
-        var gifsicleCommand = gifsiclePath + " -O3 " + inputFilePath + " --lossy=" + config.lossyLevel + " --dither=" + config.ditheringMethod + " -o " + outputFilePath;
-
-        var result = system.callSystem(gifsicleCommand);
-        loggedGifsicleCommands += result;
-
+    for (var key in configDefinitions) {
+        if (!config[key] && !(configDefinitions[key].allow_blank && config[key] === '')) {
+            var valueType = configDefinitions[key].type;
+            var defaultValue = configDefinitions[key]['default'] || '';
+            var description = configDefinitions[key].desc;
+            var userValue = promptForValue(key, valueType, defaultValue, description);
+            if (userValue !== null) {
+                config[key] = userValue;
+                changesMade = true;
+            } else if (!configDefinitions[key].allow_blank) {
+                alert(key + " is required to proceed.", errorText());
+                return null;  // Early exit if critical config is missing
+            }
+        }
     }
 
-    if (GENERATE_REPORT) {
-        logMessage(loggedGifsicleCommands, inputFile, config);
+    if (changesMade) {
+        saveConfig(filePath, config, configDefinitions);
+    }
+
+    return config;
+}
+
+/**
+ * Loads configuration settings from a given file.
+ * @param {string} filePath - The path to the configuration file.
+ * @returns {object} - The loaded configuration.
+ */
+function loadConfig(filePath) {
+    var configFile = new File(filePath);
+    var config = {};
+    if (configFile.exists) {
+        configFile.open('r');
+        while (!configFile.eof) {
+            var line = configFile.readln();
+            var parts = line.split(',');
+            if (parts.length == 2) {
+                var key = cleanString(parts[0]);
+                var value = cleanString(parts[1]);
+                config[key] = value;
+            }
+        }
+        configFile.close();
+    }
+    return config;
+}
+
+/**
+ * Saves configuration settings to a file.
+ * @param {string} filePath - The path to the configuration file.
+ * @param {object} config - The configuration settings to save.
+ * @param {object} configDefinitions - Definitions of config settings including write_to_config field.
+ */
+function saveConfig(filePath, config, configDefinitions) {
+    var configFile = new File(filePath);
+    configFile.open('w');
+    for (var key in config) {
+        if (config.hasOwnProperty(key) && configDefinitions[key].write_to_config) {
+            configFile.writeln(key + ',' + config[key]);
+        }
+    }
+    configFile.close();
+}
+
+/**
+ * Clears fragile values from the configuration settings if the user confirms.
+ * @param {string} filePath - The path to the configuration file.
+ * @param {object} config - The current configuration settings.
+ * @param {object} configDefinitions - Definitions of config settings including fragile field.
+ */
+function cleanConfig(filePath, config, configDefinitions) {
+    var userSelection = createPromptWindow(successText(), "Reset config settings before converting the next batch of gifs?\n", ["Yes"], null);
+
+    if (userSelection === "Yes") {
+        for (var key in configDefinitions) {
+            if (configDefinitions[key].fragile) {
+                delete config[key];
+            }
+        }
+        saveConfig(filePath, config, configDefinitions);
     }
 }
 
@@ -469,73 +492,97 @@ function main() {
     var configDefinitions = {
         'ffmpegPath': {
             type: 'path',
-            description: 'Locate the path to the FFMPEG executable.',
-            writeToConfig: true
+            desc: 'Locate the path to the FFMPEG executable.',
+            write_to_config: true,
+            allow_blank: false,
+            fragile: false,
         },
         'gifsiclePath': {
             type: 'path',
-            description: 'Locate the path to the gifsicle executable.',
-            writeToConfig: true
+            desc: 'Locate the path to the gifsicle executable.',
+            write_to_config: true,
+            allow_blank: false,
+            fragile: false,
         },
         'gifScale': {
             type: 'text',
             'default': '-1:-1',
-            description: 'Resolution for the output GIF. Specify as width:height (e.g., 320:240).\n\nUse -1 for width or height to automatically adjust that dimension to maintain the aspect ratio based on the other value.\n\nSetting both to -1 will use the original video’s resolution.',
-            writeToConfig: SAVE_SETTINGS
+            desc: 'Resolution for the output GIF. Specify as width:height (e.g., 320:240).\n\nUse -1 for width or height to automatically adjust that dimension to maintain the aspect ratio based on the other value.\n\nSetting both to -1 will use the original video’s resolution.',
+            write_to_config: SAVE_SETTINGS,
+            allow_blank: false,
+            fragile: true,
         },
         'gifFps': {
             type: 'text',
             'default': '12',
-            description: 'Frame rate of the output GIF.',
-            writeToConfig: SAVE_SETTINGS
+            desc: 'Frame rate of the output GIF.',
+            write_to_config: SAVE_SETTINGS,
+            allow_blank: false,
+            fragile: true,
         },
         'numColors': {
             type: 'text',
             'default': '256',
-            description: 'Maximum number of colors for the GIF. Lower values like 128 can reduce file size but may cause color banding. Values can be set from 1 to 256.',
-            writeToConfig: SAVE_SETTINGS
+            desc: 'Maximum number of colors for the GIF. Lower values like 128 can reduce file size but may cause color banding. Values can be set from 1 to 256.',
+            write_to_config: SAVE_SETTINGS,
+            allow_blank: false,
+            fragile: true,
         },
         'gifPaletteGen': {
             type: 'boolean',
             'default': 'true',
-            description: 'Whether to generate a custom color palette for each GIF. True enhances color quality, especially for complex videos.\n\nFalse uses a standard palette, which may reduce quality but speeds up processing.',
-            writeToConfig: SAVE_SETTINGS
+            desc: 'Whether to generate a custom color palette for each GIF. True enhances color quality, especially for complex videos.\n\nFalse uses a standard palette, which may reduce quality but speeds up processing.',
+            write_to_config: SAVE_SETTINGS,
+            allow_blank: false,
+            fragile: true,
         },
         'gifLoopCount': {
             type: 'text',
             'default': '0',
-            description: 'Number of loops for the GIF playback. Set to 0 for infinite.',
-            writeToConfig: SAVE_SETTINGS
+            desc: 'Number of loops for the GIF playback. Set to 0 for infinite.',
+            write_to_config: SAVE_SETTINGS,
+            allow_blank: false,
+            fragile: true,
         },
         'playbackSpeed': {
             type: 'text',
             'default': '1.0',
-            description: 'Playback speed multiplier. Use values over 1.0 to speed up the GIF, and under 1.0 to slow it down.',
-            writeToConfig: SAVE_SETTINGS
+            desc: 'Playback speed multiplier. Use values over 1.0 to speed up the GIF, and under 1.0 to slow it down.',
+            write_to_config: SAVE_SETTINGS,
+            allow_blank: false,
+            fragile: true,
         },
         'startTime': {
             type: 'text',
             'default': '0',
-            description: 'Time (in seconds) from the beginning of the video to start processing.',
-            writeToConfig: SAVE_SETTINGS
+            desc: 'Time (in seconds) from the beginning of the video to start processing.',
+            write_to_config: SAVE_SETTINGS,
+            allow_blank: false,
+            fragile: true,
         },
         'duration': {
             type: 'text',
             'default': '',
-            description: 'Duration (in seconds) of the video clip to convert into a GIF.\n\nLeave blank to convert the entire video.',
-            writeToConfig: SAVE_SETTINGS
+            desc: 'Duration (in seconds) of the video clip to convert into a GIF.\nLeave blank to convert the entire video.',
+            write_to_config: SAVE_SETTINGS,
+            allow_blank: true,
+            fragile: true,
         },
         'lossyLevel': {
             type: 'text',
-            'default': '80',
-            description: 'Level of lossy compression for Gifsicle. Values can be set from 0 to 100.',
-            writeToConfig: SAVE_SETTINGS
+            'default': '100',
+            desc: 'Level of lossy compression for Gifsicle. Values can be set from 0 to 100.',
+            write_to_config: SAVE_SETTINGS,
+            allow_blank: false,
+            fragile: true,
         },
         'ditheringMethod': {
             type: 'text',
             'default': 'ordered',
-            description: 'Dithering method for Gifsicle. Options: ordered, floyd-steinberg, ro64, o3, o4, o8, halftone',
-            writeToConfig: SAVE_SETTINGS
+            desc: 'Dithering method for Gifsicle. Options: ordered, floyd-steinberg, ro64, o3, o4, o8, halftone',
+            write_to_config: SAVE_SETTINGS,
+            allow_blank: false,
+            fragile: true,
         }
     };
 
@@ -560,11 +607,6 @@ function main() {
     var commands = buildFFMPEGCommand(config.ffmpegPath, inputFiles, outputDirectory, config);
     executeFFMPEGCommand(commands, inputFiles, config);
 
-    var endTime = new Date().getTime();
-    var totalDuration = (endTime - startTime) / 1000;
-    var durationMinutes = Math.floor(totalDuration / 60);
-    var durationSeconds = totalDuration % 60;
-
     if (config.gifPaletteGen === 'true') {
         var paletteFile = new File(outputDirectory + "/palette.png");
         if (paletteFile.exists) {
@@ -572,10 +614,19 @@ function main() {
         }
     }
 
-    // Optimize the output GIFs
+    // Optimize the output GIFs, optionally
     optimizeGIFs(config.gifsiclePath, outputDirectory, inputFiles, config);
 
-    alert(successText() + " Video conversion to GIFs completed in " + durationMinutes + " minutes and " + durationSeconds.toFixed(2) + " seconds.", successText());
+    // Clean the config file, optionally
+    cleanConfig(configFilePath, config, configDefinitions);
+
+    var endTime = new Date().getTime();
+    var totalDuration = (endTime - startTime) / 1000;
+    var durationMinutes = Math.floor(totalDuration / 60);
+    var durationSeconds = totalDuration % 60;
+
+    var successMessage = successText() + "\n\nVideo conversion to GIFs completed in " + durationMinutes + " minutes and " + durationSeconds.toFixed(2) + " seconds.\n\n";
+    createPromptWindow(successText(), successMessage, ["Thank you!"], null);
 }
 
 main();
