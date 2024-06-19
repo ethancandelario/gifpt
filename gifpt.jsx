@@ -3,7 +3,12 @@ var GENERATE_REPORT = true;
 var SAVE_SETTINGS = true;
 var SCRIPT_NAME = "gifpt";
 
-var LAST_UPDATED = "24.06.18";
+// Global Variables
+var USER_NAME = $.getenv("USERNAME");
+var LAST_UPDATED = "24.06.19";
+var successMessage = "";
+var global_progress_window;
+var configFilePath, config, configDefinitions;
 
 /**
  * Returns a randomized exclamation.
@@ -24,8 +29,8 @@ function errorText() {
         "Hey, so...",
         "Oh no...",
         "Please don't be mad at me...",
-        "Hey, " + $.getenv("USERNAME") + "...",
-        "Now " + $.getenv("USERNAME") + "..."
+        "Hey, " + USER_NAME + "...",
+        "Now " + USER_NAME + "..."
     ];
     var randomIndex = Math.floor(Math.random() * exclamations.length);
     return exclamations[randomIndex];
@@ -45,10 +50,57 @@ function successText() {
         "Processed.",
         "Confirmed.",
         "We did it!",
-        "We did it, " + $.getenv("USERNAME") + "!"
+        "We did it, " + USER_NAME + "!"
     ];
     var randomIndex = Math.floor(Math.random() * confirmations.length);
     return confirmations[randomIndex];
+}
+
+/**
+ * Returns a randomized processing phrase.
+ */
+function processingPhrase() {
+    var phrases = [
+        "Munching",
+        "Converting",
+        "Processing",
+        "Thinking about",
+        "Pondering",
+        "Visualizing",
+        "Transforming",
+        "Evaluating",
+        "Reviewing",
+        "Interpreting",
+        "Assessing",
+        "Breaking down",
+        "Sifting through",
+        "Tackling",
+        "Digesting",
+        "Scrutinizing",
+        "Filtering",
+        "Parsing",
+        "Handling",
+        "Understanding",
+        "Deciphering",
+        "Mastering",
+        "Refining",
+        "Polishing",
+        "Composing",
+        "Designing",
+        "Developing",
+        "Orchestrating",
+        "Enhancing",
+        "Perfecting",
+        "Doing my best on",
+        "(Not Responding) on",
+        "(Not Responding) over",
+        "(Not Responding) about",
+        USER_NAME + "'s favorite:",
+        USER_NAME + "'s least favorite:"
+
+    ];
+    var randomIndex = Math.floor(Math.random() * phrases.length);
+    return phrases[randomIndex];
 }
 
 /**
@@ -58,7 +110,8 @@ function successText() {
  */
 function cleanString(str) {
     if (str) {
-        return str.replace(/^\s+|\s+$/g, '');  // Regex to remove leading and trailing whitespace
+        var cleanedStr = str.replace(/^\s+|\s+$/g, ''); // Regex to remove leading and trailing whitespace
+        return cleanedStr
     }
     return '';
 }
@@ -132,14 +185,16 @@ function getFormattedTimestamp() {
  * @param {string} message - The message to be displayed.
  * @param {string[]} choices - An array of string choices for buttons (null if text input is needed).
  * @param {string} defaultValue - Default text value if applicable.
+ * @param {string} cancelText - The text for the window's close button.
  * @returns {string|null} - The value entered or chosen by the user, or null if cancelled.
  */
-function createPromptWindow(title, message, choices, defaultValue) {
+function createPromptWindow(title, message, choices, defaultValue, cancelText) {
     var win = new Window("dialog", title, undefined, { resizeable: true });
     win.orientation = "column";
     win.alignChildren = ["fill", "fill"];
     win.spacing = 10;
     win.margins = 25;
+    win.preferredSize = [300, 20];
 
     win.onResize = function () {
         this.layout.resize();
@@ -161,9 +216,7 @@ function createPromptWindow(title, message, choices, defaultValue) {
                 win.close();
             };
         }
-    }
-
-    else {
+    } else {
         var inputGroup = win.add("group");
         inputGroup.orientation = "row";
         inputGroup.alignChildren = ["fill", "center"];
@@ -181,7 +234,7 @@ function createPromptWindow(title, message, choices, defaultValue) {
     actionGroup.orientation = "row";
     actionGroup.alignChildren = ["fill", "center"];
 
-    var cancelButton = actionGroup.add("button", undefined, "Cancel");
+    var cancelButton = actionGroup.add("button", undefined, cancelText ? cancelText : "Cancel");
     cancelButton.onClick = function () {
         win.close();
     };
@@ -190,6 +243,7 @@ function createPromptWindow(title, message, choices, defaultValue) {
     win.show();
     return input;
 }
+
 
 /**
  * Logs a message to a log file, with a timestamp, the name of the associated file, and appends the config content.
@@ -210,7 +264,7 @@ function logMessage(message, logFileName, config) {
     // Create the log folder if it doesn't exist
     if (!logFolder.exists) {
         if (!logFolder.create()) {
-            alert("Failed to create log folder: " + logFolderPath, errorText());
+            createPromptWindow(errorText(), "Failed to create log folder: " + logFolderPath + "\n", ["Try again..."], null);
             return;
         }
     }
@@ -223,7 +277,7 @@ function logMessage(message, logFileName, config) {
         logFile.writeln(message);
         logFile.close();
     } else {
-        alert("Failed to open log file for writing: " + logFilePath, errorText());
+        createPromptWindow(errorText(), "Failed to open log file for writing: " + logFilePath + "\n", ["Try again..."], null);
     }
 }
 
@@ -266,7 +320,7 @@ function promptForVideoInput() {
                 return [videoInput.fsName];
             } else if (videoInput instanceof Array) {
                 return videoInput.filter(function (file) {
-                    return file instanceof File && file.name.match(/\.(mp4|mov)$/i);
+                    return file instanceof File && file.name.match(/\.(mp4|mov|avi)$/i);
                 }).map(function (file) { return file.fsName; });
             }
         }
@@ -274,12 +328,12 @@ function promptForVideoInput() {
         var videoInput = Folder.selectDialog("Select a directory containing video(s) for conversion.");
         if (videoInput) {
             return videoInput.getFiles(function (file) {
-                return file instanceof File && file.name.match(/\.(mp4|mov)$/i);
+                return file instanceof File && file.name.match(/\.(mp4|mov|avi)$/i);
             }).map(function (file) { return file.fsName; });
         }
     }
 
-    alert("No video input selected. Exiting.", errorText());
+    createPromptWindow(errorText(), "No video input selected. Exiting." + "\n", ["Try again..."], null);
     return null;
 }
 
@@ -333,7 +387,9 @@ function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
  * @returns {Array} - The FFMPEG commands.
  */
 function buildFFMPEGCommand(ffmpegPath, inputFiles, outputDirectory, config) {
+
     var commands = [];
+
     for (var i = 0; i < inputFiles.length; i++) {
         var inputFile = inputFiles[i];
         var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), ".gif"));
@@ -343,7 +399,6 @@ function buildFFMPEGCommand(ffmpegPath, inputFiles, outputDirectory, config) {
         var playbackSpeed = config.playbackSpeed ? "setpts=" + (1 / parseFloat(config.playbackSpeed)) + "*PTS" : "";
         var numColors = config.numColors ? config.numColors : "256"; // Default to 256 if not specified.
 
-        // Ensure file paths are properly quoted to handle spaces
         inputFile = "\"" + inputFile + "\"";
         var palettePath = "\"" + outputDirectory + "/palette.png\"";
         outputFilePath = "\"" + outputFilePath + "\"";
@@ -354,30 +409,90 @@ function buildFFMPEGCommand(ffmpegPath, inputFiles, outputDirectory, config) {
 
             commands.push(paletteGenCmd);
             commands.push(paletteUseCmd);
-        } else {
+        }
+        else {
             var filter = "fps=" + config.gifFps + ",scale=" + config.gifScale + ",split[x][z];[z]palettegen=max_colors=" + numColors + "[p];[x][p]paletteuse";
             var command = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -vf \"" + playbackSpeed + "," + filter + "\" -loop " + config.gifLoopCount + " " + outputFilePath + " " + duration;
             commands.push(command);
         }
     }
+
     return commands;
 }
 
 /**
+ * Creates a progress bar window.
+ * @param {string} title - The title of the progress bar window.
+ * @param {number} maxValue - The maximum value of the progress bar.
+ * @returns {Object} An object containing the progress bar and the window.
+ */
+function createProgressBar(title, maxValue) {
+
+    var progress_bar_window = new Window("palette", title, undefined, {closeButton: false, independent: true});
+    var progress_bar = progress_bar_window.add("progressbar", undefined, 0, maxValue);
+
+    progress_bar.preferredSize = [300, 20];
+
+    progress_bar_window.redraw = function () {
+        progress_bar_window.update();
+    }
+
+    progress_bar_window.updateTitle = function (newTitle) {
+        progress_bar_window.text = newTitle;
+        progress_bar_window.update();
+    };
+
+    progress_bar_window.updateProgress = function (value) {
+        progress_bar.value = value;
+        progress_bar_window.update();
+    };
+
+    progress_bar_window.seppuku = function () {
+        progress_bar_window.hide();
+        progress_bar_window.close();
+        progress_bar_window.visible = false;
+    }
+
+    return {
+        progress_bar: progress_bar,
+        window: progress_bar_window
+    };
+}
+
+
+/**
  * Executes the provided FFMPEG commands.
  * @param {Array} commands - The FFMPEG commands to execute.
- * @param {Array} videoInput - The original video files to be converted.
+ * @param {Array} inputFiles - The original video files to be converted.
  * @param {Array} config - The conversion settings, defined by the user.
  */
 function executeFFMPEGCommand(commands, inputFiles, config) {
     var loggedFFMPEGCommands = "";
 
+    var progressWindowTitle = "Processing gifs...";
+    global_progress_window = createProgressBar(progressWindowTitle, commands.length);
+    global_progress_window.window.show();
+
     // Execute each command.
     for (var i = 0; i < commands.length; i++) {
+
+        global_progress_window.window.redraw();
+
+        var newTitle = processingPhrase() + " GIF " + (i + 1) + " of " + commands.length;
+        global_progress_window.window.updateTitle(newTitle);
+
         var command = commands[i];
         var result = system.callSystem(command);
+
+        global_progress_window.window.updateProgress(i + 1);
+
         loggedFFMPEGCommands += "\n" + result + "\n";
     }
+
+    // Hopefully, hide the window.
+    // If the script goes non-responsive during GIF processing, sometimes the window will become stuck.
+    // Running this script again (and canceling) works as a quick fix.
+    global_progress_window.window.seppuku();
 
     // Create a log for each processed video, and for the FFMPEG results.
     if (GENERATE_REPORT) {
@@ -386,6 +501,7 @@ function executeFFMPEGCommand(commands, inputFiles, config) {
             logMessage(commands[i], inputFiles[i], config);
         }
     }
+
 }
 
 /**
@@ -408,7 +524,7 @@ function initializeConfig(filePath, configDefinitions) {
                 config[key] = userValue;
                 changesMade = true;
             } else if (!configDefinitions[key].allow_blank) {
-                alert(key + " is required to proceed.", errorText());
+                createPromptWindow(errorText(), key + " is required to proceed." + "\n", ["OK"], null);
                 return null;  // Early exit if critical config is missing
             }
         }
@@ -469,7 +585,7 @@ function saveConfig(filePath, config, configDefinitions) {
  * @param {object} configDefinitions - Definitions of config settings including fragile field.
  */
 function cleanConfig(filePath, config, configDefinitions) {
-    var userSelection = createPromptWindow(successText(), "Reset config settings before converting the next batch of gifs?\n", ["Yes"], null);
+    var userSelection = createPromptWindow(successText(), "Reset config settings?\n", ["Yes"], null, "No");
 
     if (userSelection === "Yes") {
         for (var key in configDefinitions) {
@@ -488,8 +604,8 @@ function main() {
 
     var startTime = new Date().getTime();
 
-    // Configuration definitions
-    var configDefinitions = {
+    // GIF Conversion Parameters
+    configDefinitions = {
         'ffmpegPath': {
             type: 'path',
             desc: 'Locate the path to the FFMPEG executable.',
@@ -580,16 +696,18 @@ function main() {
             type: 'text',
             'default': 'ordered',
             desc: 'Dithering method for Gifsicle. Options: ordered, floyd-steinberg, ro64, o3, o4, o8, halftone',
+            // TODO Add radio/dropdown selector to setup
             write_to_config: SAVE_SETTINGS,
             allow_blank: false,
             fragile: true,
         }
     };
 
-    var configFilePath = File($.fileName).path + "/config.csv";
-    var config = initializeConfig(configFilePath, configDefinitions);
+    configFilePath = File($.fileName).path + "/config.csv";
+    config = initializeConfig(configFilePath, configDefinitions);
+
     if (!config) {
-        alert("Script initialization failed. Exiting.", errorText());
+        createPromptWindow(errorText(), "Script initialization failed. Please try again!" + "\n", ["OK"], null);
         return;
     }
 
@@ -598,7 +716,7 @@ function main() {
 
     var outputDirectory = promptForOutputDirectory();
     if (!outputDirectory) {
-        alert("Output directory is required to proceed. Exiting.", errorText());
+        createPromptWindow(errorText(), "No seriously, where should we save these GIFS?" + "\n", ["OK"], null);
         return;
     }
 
@@ -625,8 +743,13 @@ function main() {
     var durationMinutes = Math.floor(totalDuration / 60);
     var durationSeconds = totalDuration % 60;
 
-    var successMessage = successText() + "\n\nVideo conversion to GIFs completed in " + durationMinutes + " minutes and " + durationSeconds.toFixed(2) + " seconds.\n\n";
-    createPromptWindow(successText(), successMessage, ["Thank you!"], null);
+    successMessage = successText() + "\n\nVideo conversion to GIFs completed in " + durationMinutes + " minutes and " + durationSeconds.toFixed(2) + " seconds.\n\n";
 }
 
 main();
+
+if (successMessage) {
+    createPromptWindow(successText(), successMessage, ["Thank you!"], null, "Close");
+    global_progress_window.window.update();
+    global_progress_window.window.seppuku();
+}
