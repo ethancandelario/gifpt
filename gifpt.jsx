@@ -245,7 +245,8 @@ function createPromptWindow(title, message, choices, defaultValue, cancelText) {
                 win.close();
             };
         }
-    } else {
+    }
+    else {
         var inputGroup = win.add("group");
         inputGroup.orientation = "row";
         inputGroup.alignChildren = ["fill", "center"];
@@ -366,7 +367,7 @@ function logMessage(message, logFileName, config, outputDirectory) {
 
     var timestamp = getFormattedTimestamp();
     var logFolderPath = outputDirectory + "/log";
-    var logFilePath = logFolderPath + "/" + outputFileName + "_" + timestamp + "_log.txt";
+    var logFilePath = logFolderPath + "/" + outputFileName + "_" + timestamp + ".txt";
     var logFolder = new Folder(logFolderPath);
 
     // Create the log folder if it doesn't exist
@@ -584,7 +585,7 @@ function executeFFMPEGCommand(commands, inputFiles, config) {
 
     // Create a log for each processed video, and for the FFMPEG results.
     if (GENERATE_REPORT) {
-        logMessage(loggedFFMPEGCommands, SCRIPT_NAME.toUpperCase() + "-report", config, outputDirectory);
+        logMessage(loggedFFMPEGCommands, "_" + SCRIPT_NAME + "-report", config, outputDirectory);
         for (var i = 0; i < inputFiles.length; i++) {
             logMessage(commands[i], inputFiles[i], config, outputDirectory);
         }
