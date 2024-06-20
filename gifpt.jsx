@@ -34,7 +34,7 @@ var successMessage = "";
 var global_progress_window;
 var configFilePath, config, configDefinitions;
 var videoInput, outputDirectory;
-var video_formats = /\.(mp4|mov|avi)$/i;
+var accepted_formats = /\.(mp4|mov|avi)$/i;
 
 /**
  * Returns a randomized exclamation.
@@ -383,6 +383,7 @@ function logMessage(message, logFileName, config, outputDirectory) {
     if (logFile.open('w')) {
         var configContent = JSON.stringify(config, null, 4);
         logFile.writeln("Configuration Settings:\n" + configContent + "\n\nLogged Messages:\n");
+        logFile.writeln("\nConfig File Path: " + configFilePath+ "\n");
         logFile.writeln(message);
         logFile.close();
     } else {
@@ -436,7 +437,7 @@ function promptForVideoInput() {
             else if (videoInput instanceof Array) {
                 app.settings.saveSetting(SCRIPT_NAME, "last_selected_file_folder", videoInput[0].parent.fsName);
                 return videoInput.filter(function (file) {
-                    return file instanceof File && file.name.match(video_formats);
+                    return file instanceof File && file.name.match(accepted_formats);
                 }).map(function (file) { return file.fsName; });
             }
         }
@@ -449,7 +450,7 @@ function promptForVideoInput() {
         if (videoInputDir) {
             app.settings.saveSetting(SCRIPT_NAME, "last_selected_dir_folder", videoInputDir.fsName);
             return videoInputDir.getFiles(function (file) {
-                return file instanceof File && file.name.match(video_formats);
+                return file instanceof File && file.name.match(accepted_formats);
             }).map(function (file) { return file.fsName; });
         }
     }
