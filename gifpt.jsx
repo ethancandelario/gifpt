@@ -24,7 +24,7 @@ var LAST_UPDATED = (function (dateString) {
         var monthStr = month.length === 1 ? "0" + month : month;
         var yearStr = year.length === 1 ? "0" + year : year;
 
-        return yearStr + "." + monthStr + "." + dayStr + ".0";
+        return "1." + yearStr + "." + monthStr + "." + dayStr + ".0";
     } else {
         return dateString;
     }
