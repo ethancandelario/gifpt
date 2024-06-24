@@ -32,8 +32,8 @@ var LAST_UPDATED = (function (dateString) {
 
 var successMessage = "";
 var global_progress_window;
-var configFilePath, config, configDefinitions;
-var videoInput, outputDirectory;
+var configFilePath, palettePath, videoInput, outputDirectory;
+var config, configDefinitions;
 var accepted_formats = /\.(mp4|mov|avi)$/i;
 
 /**
@@ -133,17 +133,28 @@ function processingPhrase() {
 
 /**
  * Generates a timestamp formatted as a string.
+ * @param {number} precision - The number of time units to include (1-6).
  * @returns {string} - The formatted timestamp.
  */
-function getFormattedTimestamp() {
+function getFormattedTimestamp(precision) {
     var now = new Date();
-    var year = now.getFullYear();
-    var month = ('0' + (now.getMonth() + 1)).slice(-2);
-    var day = ('0' + now.getDate()).slice(-2);
-    var hours = ('0' + now.getHours()).slice(-2);
-    var minutes = ('0' + now.getMinutes()).slice(-2);
-    var seconds = ('0' + now.getSeconds()).slice(-2);
-    return month + "-" + day + "-" + hours + "-" + minutes + "-" + seconds;
+    var units = [
+        now.getFullYear(),
+        ('0' + (now.getMonth() + 1)).slice(-2),
+        ('0' + now.getDate()).slice(-2),
+        ('0' + now.getHours()).slice(-2),
+        ('0' + now.getMinutes()).slice(-2),
+        ('0' + now.getSeconds()).slice(-2)
+    ];
+
+    // Handle undefined or invalid length
+    if (typeof precision === 'undefined' || isNaN(precision) || precision < 1 || precision > units.length) {
+        precision = units.length;
+    } else {
+        precision = Math.floor(precision);
+    }
+    
+    return units.slice(units.length - precision).join('-');
 }
 
 /**
@@ -365,7 +376,7 @@ function createProgressBar(title, maxValue) {
 function logMessage(message, logFileName, config, outputDirectory) {
     var outputFileName = extractFileName(logFileName);
 
-    var timestamp = getFormattedTimestamp();
+    var timestamp = getFormattedTimestamp(5);
     var logFolderPath = outputDirectory + "/log";
     var logFilePath = logFolderPath + "/" + outputFileName + "_" + timestamp + ".txt";
     var logFolder = new Folder(logFolderPath);
@@ -519,7 +530,7 @@ function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
     global_progress_window.window.seppuku();
 
     if (GENERATE_REPORT) {
-        logMessage(loggedGifsicleCommands, "_" + SCRIPT_NAME + "-optimized", config, outputDirectory);
+        logMessage(loggedGifsicleCommands, "_" + SCRIPT_NAME + "-optimize-log", config, outputDirectory);
     }
 }
 
@@ -547,7 +558,7 @@ function buildFFMPEGCommand(ffmpegPath, inputFiles, outputDirectory, config) {
         var numColors = config.numColors ? (config.numColors > 256 ? 256 : config.numColors) : "256";
 
         inputFile = "\"" + inputFile + "\"";
-        var palettePath = "\"" + outputDirectory + "/palette.png\"";
+        palettePath = "\"" + outputDirectory + "/palette.png\"";
         outputFilePath = "\"" + outputFilePath + "\"";
 
         if (config.gifPaletteGen === 'true') {
@@ -579,29 +590,34 @@ function executeFFMPEGCommand(commands, inputFiles, config) {
     global_progress_window = createProgressBar(progressWindowTitle, commands.length);
     global_progress_window.window.show();
 
+    var calculatedCurrentGIF = 1;
+
     // Execute each command.
     for (var i = 0; i < commands.length; i++) {
-        global_progress_window.window.redraw();
 
-        var newTitle = processingPhrase() + " GIF " + (i + 1) + " of " + commands.length;
+        global_progress_window.window.redraw();
+        var newTitle = processingPhrase() + " GIF " + (calculatedCurrentGIF) + " of " + videoInput.length;
         global_progress_window.window.updateTitle(newTitle);
 
         var command = commands[i];
         var result = system.callSystem(command);
+
+        // For cases where palette generation is enabled, the array of commands will be double the actual amount of GIFS to convert.
+        // We determine the current calculated GIF label by taking the current value + 1 and comparing it to the total number of input files.
+        // If greater, then the next for loop would result in the label exeding the total number of input files, so we set the label to display that number of files.
+        // If lesser, then we increment the label by 1.
+        calculatedCurrentGIF = (calculatedCurrentGIF + 1 > videoInput.length) ? videoInput.length : calculatedCurrentGIF + 1;
 
         global_progress_window.window.updateProgress(i + 1);
 
         loggedFFMPEGCommands += "\n" + result + "\n";
     }
 
-    // Hopefully, hide the window.
-    // If the script goes non-responsive during GIF processing, sometimes the window will become stuck.
-    // Running this script again (and canceling) works as a quick fix.
     global_progress_window.window.seppuku();
 
     // Create a log for each processed video, and for the FFMPEG results.
     if (GENERATE_REPORT) {
-        logMessage(loggedFFMPEGCommands, "_" + SCRIPT_NAME + "-report", config, outputDirectory);
+        logMessage(loggedFFMPEGCommands, "_" + SCRIPT_NAME + "-log", config, outputDirectory);
         for (var i = 0; i < inputFiles.length; i++) {
             logMessage(commands[i], inputFiles[i], config, outputDirectory);
         }
