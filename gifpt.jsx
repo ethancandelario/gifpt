@@ -405,7 +405,7 @@ function logMessage(message, logFileName, config, outputDirectory) {
     if (logFile.open('w')) {
         logMessageContent += "Config Path: " + decodeURIComponent(configFilePath) + "\n\n";
         logMessageContent += "Config Settings:" + "\n" + formattedConfigSettings + "\n\n";
-        logMessageContent += "Logged Messages:" + "\n\n";
+        logMessageContent += "Logged Messages:" + "\n";
         logMessageContent += message;
 
         logFile.writeln(logMessageContent);
