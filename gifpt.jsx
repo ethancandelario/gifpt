@@ -28,7 +28,7 @@ var LAST_UPDATED = (function (dateString) {
     } else {
         return dateString;
     }
-})("24.06.19");
+})("24.06.24");
 
 var successMessage = "";
 var global_progress_window;
@@ -143,7 +143,7 @@ function getFormattedTimestamp() {
     var hours = ('0' + now.getHours()).slice(-2);
     var minutes = ('0' + now.getMinutes()).slice(-2);
     var seconds = ('0' + now.getSeconds()).slice(-2);
-    return year + "-" + month + "-" + day + "-" + hours + "-" + minutes + "-" + seconds;
+    return month + "-" + day + "-" + hours + "-" + minutes + "-" + seconds;
 }
 
 /**
@@ -487,24 +487,39 @@ function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
     var userSelection = createPromptWindow("Setup: Optimization", "Attempt to optimize GIFs?\n", ["Yes", "No"], null);
     var loggedGifsicleCommands = "";
 
+    var progressWindowTitle = "Optimizing GIFS...";
+    global_progress_window = createProgressBar(progressWindowTitle, inputFiles.length);
+    global_progress_window.window.show();
+
     if (userSelection !== "Yes") {
         return;
     }
 
     for (var i = 0; i < inputFiles.length; i++) {
+
+        var newTitle = " Optimizing GIFs...";
+        global_progress_window.window.updateTitle(newTitle);
+
         var inputFile = inputFiles[i];
-        var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), "_optimized.gif"));
+        var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), "-optimized.gif"));
         var inputFilePath = "\"" + outputDirectory + "/" + decodeURIComponent(replaceFileExtension(new File(inputFile), ".gif")) + "\"";
         var outputFilePath = "\"" + outputDirectory + "/" + outputFileName + "\"";
 
         var gifsicleCommand = gifsiclePath + " -O3 " + inputFilePath + " --lossy=" + config.lossyLevel + " --dither=" + config.ditheringMethod + " -o " + outputFilePath;
 
+        global_progress_window.window.redraw();
+
         var result = system.callSystem(gifsicleCommand);
+
+        global_progress_window.window.updateProgress(i + 1);
+
         loggedGifsicleCommands += "\n" + gifsicleCommand + "\n";
     }
 
+    global_progress_window.window.seppuku();
+
     if (GENERATE_REPORT) {
-        logMessage(loggedGifsicleCommands, SCRIPT_NAME + "_optimized", config, outputDirectory);
+        logMessage(loggedGifsicleCommands, "_" + SCRIPT_NAME + "-optimized", config, outputDirectory);
     }
 }
 
