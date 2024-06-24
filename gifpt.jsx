@@ -154,7 +154,7 @@ function getFormattedTimestamp(precision) {
     } else {
         precision = Math.floor(precision);
     }
-    
+
     return units.slice(units.length - precision).join('-');
 }
 
@@ -407,12 +407,16 @@ function logMessage(message, logFileName, config, outputDirectory) {
  * Prompts the user for a value for a given configuration key, using a custom dialog window.
  * @param {string} key - The configuration key.
  * @param {string} valueType - The type of value (path, boolean, text).
- * @param {string} defaultValue - The default value.
+ * @param {string} inputType - The type of input method (system_dialog, boolean, text_input, text_input_pair, radio).
+ * @param {string} defaultValue - The default value for the configuration key.
  * @param {string} description - Description of what the configuration key affects.
  * @returns {string|null} - The user-provided value or null if none.
  */
-function promptForValue(key, valueType, defaultValue, description) {
-    var promptMessage = description + "\n\n" + "Please enter the value for " + key + " (Default: " + defaultValue + "):";
+function promptForValue(key, valueType, inputType, defaultValue, description) {
+
+    var defaultValueLabel = defaultValue === "" ? "Default: Blank" : "Default: " + defaultValue;
+
+    var promptMessage = description + "\n\n" + "Please enter the value for " + key + " (" + defaultValueLabel + "):"
 
     switch (valueType) {
         case 'path':
@@ -497,7 +501,7 @@ function promptForOutputDirectory() {
  */
 function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
     var userSelection = createPromptWindow("Setup: Optimization", "Attempt to optimize GIFs?\n", ["Yes", "No"], null);
-    
+
     var loggedGifsicleCommands = "";
 
     if (userSelection !== "Yes") {
@@ -606,10 +610,11 @@ function executeFFMPEGCommand(commands, inputFiles, config) {
         var command = commands[i];
         var result = system.callSystem(command);
 
-        // For cases where palette generation is enabled, the array of commands will be double the actual amount of GIFS to convert.
-        // We determine the current calculated GIF label by taking the current value + 1 and comparing it to the total number of input files.
-        // If greater, then the next for loop would result in the label exeding the total number of input files, so we set the label to display that number of files.
-        // If lesser, then we increment the label by 1.
+        // When palette generation is enabled, there are two commands per GIF (palette generation and conversion),
+        // so the commands array is twice the size of the input array. We adjust calculatedCurrentGIF accordingly:
+        // We determine the next GIF number by comparing (calculatedCurrentGIF + 1) to videoInput.length
+        // If (calculatedCurrentGIF + 1) would exceed the total number of input files, we cap it at the total number of files
+        // If (calculatedCurrentGIF + 1) is not greater than the total number of input files, we increment calculatedCurrentGIF by 1
         calculatedCurrentGIF = (calculatedCurrentGIF + 1 > videoInput.length) ? videoInput.length : calculatedCurrentGIF + 1;
 
         global_progress_window.window.updateProgress(i + 1);
@@ -631,29 +636,40 @@ function executeFFMPEGCommand(commands, inputFiles, config) {
 /**
  * Initializes the configuration by loading existing settings or prompting the user for new ones.
  * @param {string} filePath - The path to the configuration file.
- * @param {object} configDefinitions - Definitions of config settings including type, default values, descriptions, and allowBlank.
- * @returns {object|null} - The initialized configuration or null if critical config is missing.
+ * @param {object} configDefinitions - Definitions of config settings.
+ * @returns {object|null} - The initialized configuration object or null if a required config value is missing.
  */
 function initializeConfig(filePath, configDefinitions) {
-    var config = loadConfig(filePath);
     var changesMade = false;
+    config = loadConfig(filePath);
 
     for (var key in configDefinitions) {
-        if (!config[key] && !(configDefinitions[key].allow_blank && config[key] === '')) {
+        // If the value for a given key is undefined, or blank (but blank values are not allowed) then we...
+        if (config[key] === undefined || (config[key] === '' && !configDefinitions[key].allow_blank)) {
+            // First, read information from configDefinitions for the current key.
             var valueType = configDefinitions[key].type;
+            var inputType = configDefinitions[key].input_type;
             var defaultValue = configDefinitions[key].default_value || '';
             var description = configDefinitions[key].desc;
-            var userValue = promptForValue(key, valueType, defaultValue, description);
+
+            // Prompt the user for that key's value.
+            var userValue = promptForValue(key, valueType, inputType, defaultValue, description);
+
+            // If the response is valid, store the value and flag that the config was updated.
             if (userValue !== null) {
                 config[key] = userValue;
                 changesMade = true;
-            } else if (!configDefinitions[key].allow_blank) {
+            }
+            // If the user provides an invalid value, or closes the prompt,
+            // and we require a value for that key, prompt the user to retry and exit.
+            else if (!configDefinitions[key].allow_blank) {
                 createPromptWindow(errorText(), key + " is required to proceed." + "\n", ["OK"], null);
-                return null;  // Early exit if critical config is missing
+                return null;
             }
         }
     }
 
+    // Save the updated config if changes were made.
     if (changesMade) {
         saveConfig(filePath, config, configDefinitions);
     }
