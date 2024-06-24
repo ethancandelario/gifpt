@@ -125,7 +125,8 @@ function processingPhrase() {
         "(Not Responding) over",
         "(Not Responding) about",
         USER_NAME + "'s favorite:",
-        USER_NAME + "'s least favorite:"
+        USER_NAME + "'s least favorite:",
+        "Taking my time with",
 
     ];
     var randomIndex = Math.floor(Math.random() * phrases.length);
@@ -163,12 +164,13 @@ function getFormattedTimestamp(precision) {
  * @param {string} str - The string to be cleaned.
  * @returns {string} - The cleaned string.
  */
-function cleanString(str) {
+function cleanSpaces(str) {
     if (str) {
-        var cleanedStr = str.replace(/^\s+|\s+$/g, ''); // Regex to remove leading and trailing whitespace
+        // Regex to remove leading and trailing whitespace
+        var cleanedStr = str.replace(/^\s+|\s+$/g, '');
         return cleanedStr
     }
-    return '';
+    return "";
 }
 
 /**
@@ -375,14 +377,22 @@ function createProgressBar(title, maxValue) {
  * @param {string} outputDirectory - The directory where the output GIFs are saved.
  */
 function logMessage(message, logFileName, config, outputDirectory) {
-    var outputFileName = extractFileName(logFileName);
 
+    var logMessageContent = "";
     var timestamp = getFormattedTimestamp(5);
+
+    var formattedConfigSettings = JSON.stringify(
+        config,
+        null,  // No replacer function - include all properties
+        4      // Number of spaces for indentation
+    );
+
+    var outputFileName = extractFileName(logFileName);
     var logFolderPath = outputDirectory + "/log";
     var logFilePath = logFolderPath + "/" + outputFileName + "_" + timestamp + ".txt";
     var logFolder = new Folder(logFolderPath);
 
-    // Create the log folder if it doesn't exist
+    // Create the log folder if it doesn't already exist
     if (!logFolder.exists) {
         if (!logFolder.create()) {
             createPromptWindow(errorText(), "Failed to create log folder: " + logFolderPath + "\n", ["Try again..."], null);
@@ -393,12 +403,16 @@ function logMessage(message, logFileName, config, outputDirectory) {
     var logFile = new File(logFilePath);
 
     if (logFile.open('w')) {
-        var configContent = JSON.stringify(config, null, 4);
-        logFile.writeln("Configuration Settings:\n" + configContent + "\n\nLogged Messages:\n");
-        logFile.writeln("\nConfig File Path: " + configFilePath + "\n");
-        logFile.writeln(message);
+        logMessageContent += "Config Path: " + decodeURIComponent(configFilePath) + "\n\n";
+        logMessageContent += "Config Settings:" + "\n" + formattedConfigSettings + "\n\n";
+        logMessageContent += "Logged Messages:" + "\n\n";
+        logMessageContent += message;
+
+        logFile.writeln(logMessageContent);
+
         logFile.close();
-    } else {
+    }
+    else {
         createPromptWindow(errorText(), "Failed to open log file for writing: " + logFilePath + "\n", ["Try again..."], null);
     }
 }
@@ -691,8 +705,8 @@ function loadConfig(filePath) {
             var line = configFile.readln();
             var parts = line.split(',');
             if (parts.length == 2) {
-                var key = cleanString(parts[0]);
-                var value = cleanString(parts[1]);
+                var key = cleanSpaces(parts[0]);
+                var value = cleanSpaces(parts[1]);
                 config[key] = value;
             }
         }
@@ -802,7 +816,7 @@ function main() {
             type: 'boolean',
             input_type: 'boolean',
             default_value: 'true',
-            desc: 'Whether to generate a custom color palette for each GIF. True enhances color quality, especially for complex videos.\n\nFalse uses a standard palette, which may reduce quality but speeds up processing.',
+            desc: 'Whether to generate a custom color palette for each GIF.\nTrue enhances color quality, especially for complex videos.\n\nFalse uses a standard palette, which may reduce quality but speeds up processing.',
             write_to_config: SAVE_SETTINGS,
             allow_blank: false,
             fragile: true,
