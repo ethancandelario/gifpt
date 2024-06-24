@@ -383,7 +383,7 @@ function logMessage(message, logFileName, config, outputDirectory) {
     if (logFile.open('w')) {
         var configContent = JSON.stringify(config, null, 4);
         logFile.writeln("Configuration Settings:\n" + configContent + "\n\nLogged Messages:\n");
-        logFile.writeln("\nConfig File Path: " + configFilePath+ "\n");
+        logFile.writeln("\nConfig File Path: " + configFilePath + "\n");
         logFile.writeln(message);
         logFile.close();
     } else {
@@ -487,13 +487,13 @@ function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
     var userSelection = createPromptWindow("Setup: Optimization", "Attempt to optimize GIFs?\n", ["Yes", "No"], null);
     var loggedGifsicleCommands = "";
 
-    var progressWindowTitle = "Optimizing GIFS...";
-    global_progress_window = createProgressBar(progressWindowTitle, inputFiles.length);
-    global_progress_window.window.show();
-
     if (userSelection !== "Yes") {
         return;
     }
+
+    var progressWindowTitle = "Optimizing GIFS...";
+    global_progress_window = createProgressBar(progressWindowTitle, inputFiles.length);
+    global_progress_window.window.show();
 
     for (var i = 0; i < inputFiles.length; i++) {
 
@@ -711,7 +711,7 @@ function main() {
         cleanConfig(configFilePath, config, configDefinitions);
     }
 
-    createLogoWindow(SCRIPT_NAME + " v" + LAST_UPDATED, "", null, "Make some gifs!", main_logo_binary, );
+    createLogoWindow(SCRIPT_NAME + " v" + LAST_UPDATED, "", null, "Make some gifs!", main_logo_binary,);
 
     // GIF Conversion Parameters
     configDefinitions = {
@@ -812,7 +812,7 @@ function main() {
         }
     };
 
-    configFilePath = File($.fileName).path + "/config.csv";
+    configFilePath = File($.fileName).path + "/config.txt";
     config = initializeConfig(configFilePath, configDefinitions);
 
     if (!config) {
