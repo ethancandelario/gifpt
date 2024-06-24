@@ -7,6 +7,7 @@ var GENERATE_REPORT = true;
 var SAVE_SETTINGS = true;
 var SCRIPT_NAME = "gifpt";
 var CLEAN_CONFIG_AT_START = true;
+var ADD_SUFFIX_TO_OPTIMIZED_GIF = true;
 var BUTTON_HEIGHT = 50;
 var BUTTON_WIDTH = 100;
 
@@ -496,6 +497,7 @@ function promptForOutputDirectory() {
  */
 function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
     var userSelection = createPromptWindow("Setup: Optimization", "Attempt to optimize GIFs?\n", ["Yes", "No"], null);
+    
     var loggedGifsicleCommands = "";
 
     if (userSelection !== "Yes") {
@@ -506,13 +508,15 @@ function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
     global_progress_window = createProgressBar(progressWindowTitle, inputFiles.length);
     global_progress_window.window.show();
 
+    var optimizedGIFSuffix = ADD_SUFFIX_TO_OPTIMIZED_GIF ? "optimized" : "";
+
     for (var i = 0; i < inputFiles.length; i++) {
 
         var newTitle = " Optimizing GIFs...";
         global_progress_window.window.updateTitle(newTitle);
 
         var inputFile = inputFiles[i];
-        var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), "-optimized.gif"));
+        var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), "-" + optimizedGIFSuffix + ".gif"));
         var inputFilePath = "\"" + outputDirectory + "/" + decodeURIComponent(replaceFileExtension(new File(inputFile), ".gif")) + "\"";
         var outputFilePath = "\"" + outputDirectory + "/" + outputFileName + "\"";
 
@@ -637,7 +641,7 @@ function initializeConfig(filePath, configDefinitions) {
     for (var key in configDefinitions) {
         if (!config[key] && !(configDefinitions[key].allow_blank && config[key] === '')) {
             var valueType = configDefinitions[key].type;
-            var defaultValue = configDefinitions[key]['default'] || '';
+            var defaultValue = configDefinitions[key].default_value || '';
             var description = configDefinitions[key].desc;
             var userValue = promptForValue(key, valueType, defaultValue, description);
             if (userValue !== null) {
@@ -723,16 +727,20 @@ function cleanConfig(filePath, config, configDefinitions) {
 function main() {
     var startTime = new Date().getTime();
 
+    // Clean the config file, optionally
     if (CLEAN_CONFIG_AT_START && config && configDefinitions && configFilePath) {
         cleanConfig(configFilePath, config, configDefinitions);
     }
 
+    // Startup screen
     createLogoWindow(SCRIPT_NAME + " v" + LAST_UPDATED, "", null, "Make some gifs!", main_logo_binary,);
 
     // GIF Conversion Parameters
     configDefinitions = {
         'ffmpegPath': {
             type: 'path',
+            input_type: 'system_dialog',
+            default_value: '',
             desc: 'Locate the path to the FFMPEG executable.',
             write_to_config: true,
             allow_blank: false,
@@ -740,6 +748,8 @@ function main() {
         },
         'gifsiclePath': {
             type: 'path',
+            input_type: 'system_dialog',
+            default_value: '',
             desc: 'Locate the path to the gifsicle executable.',
             write_to_config: true,
             allow_blank: false,
@@ -747,7 +757,8 @@ function main() {
         },
         'gifScale': {
             type: 'text',
-            'default': '-1:-1',
+            input_type: 'text_input_pair',
+            default_value: '-1:-1',
             desc: 'Resolution for the output GIF. Specify as width:height (e.g., 320:240).\n\nUse -1 for width or height to automatically adjust that dimension to maintain the aspect ratio based on the other value.\n\nSetting both to -1 will use the original video’s resolution.',
             write_to_config: SAVE_SETTINGS,
             allow_blank: false,
@@ -755,7 +766,8 @@ function main() {
         },
         'gifFps': {
             type: 'text',
-            'default': '12',
+            input_type: 'text_input',
+            default_value: '12',
             desc: 'Frame rate of the output GIF.',
             write_to_config: SAVE_SETTINGS,
             allow_blank: false,
@@ -763,7 +775,8 @@ function main() {
         },
         'numColors': {
             type: 'text',
-            'default': '256',
+            input_type: 'text_input',
+            default_value: '256',
             desc: 'Maximum number of colors for the GIF. Lower values like 128 can reduce file size but may cause color banding. Values can be set from 1 to 256.',
             write_to_config: SAVE_SETTINGS,
             allow_blank: false,
@@ -771,7 +784,8 @@ function main() {
         },
         'gifPaletteGen': {
             type: 'boolean',
-            'default': 'true',
+            input_type: 'boolean',
+            default_value: 'true',
             desc: 'Whether to generate a custom color palette for each GIF. True enhances color quality, especially for complex videos.\n\nFalse uses a standard palette, which may reduce quality but speeds up processing.',
             write_to_config: SAVE_SETTINGS,
             allow_blank: false,
@@ -779,7 +793,8 @@ function main() {
         },
         'gifLoopCount': {
             type: 'text',
-            'default': '0',
+            input_type: 'text_input',
+            default_value: '0',
             desc: 'Number of loops for the GIF playback. Set to 0 for infinite.',
             write_to_config: SAVE_SETTINGS,
             allow_blank: false,
@@ -787,7 +802,8 @@ function main() {
         },
         'playbackSpeed': {
             type: 'text',
-            'default': '1.0',
+            input_type: 'text_input',
+            default_value: '1.0',
             desc: 'Playback speed multiplier. Use values over 1.0 to speed up the GIF, and under 1.0 to slow it down.',
             write_to_config: SAVE_SETTINGS,
             allow_blank: false,
@@ -795,7 +811,8 @@ function main() {
         },
         'startTime': {
             type: 'text',
-            'default': '0',
+            input_type: 'text_input',
+            default_value: '0',
             desc: 'Time (in seconds) from the beginning of the video to start processing.',
             write_to_config: SAVE_SETTINGS,
             allow_blank: false,
@@ -803,7 +820,8 @@ function main() {
         },
         'duration': {
             type: 'text',
-            'default': '',
+            input_type: 'text_input',
+            default_value: '',
             desc: 'Duration (in seconds) of the video clip to convert into a GIF.\nLeave blank to convert the entire video.',
             write_to_config: SAVE_SETTINGS,
             allow_blank: true,
@@ -811,7 +829,8 @@ function main() {
         },
         'lossyLevel': {
             type: 'text',
-            'default': '100',
+            input_type: 'text_input',
+            default_value: '100',
             desc: 'Level of lossy compression for Gifsicle. Values can be set from 0 to 100.',
             write_to_config: SAVE_SETTINGS,
             allow_blank: false,
@@ -819,9 +838,9 @@ function main() {
         },
         'ditheringMethod': {
             type: 'text',
-            'default': 'ordered',
+            input_type: 'radio',
+            default_value: 'ordered',
             desc: 'Dithering method for Gifsicle. Options: ordered, floyd-steinberg, ro64, o3, o4, o8, halftone',
-            // TODO Add radio/dropdown selector to setup
             write_to_config: SAVE_SETTINGS,
             allow_blank: false,
             fragile: true,
