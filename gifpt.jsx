@@ -4,14 +4,13 @@ var main_logo_binary = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a\x00\x00\x00\x0d\x49\x48
 
 // Parameters
 var GENERATE_REPORT = true;
-var SAVE_SETTINGS = true;
-var SCRIPT_NAME = "gifpt";
 var CLEAN_CONFIG_AT_START = true;
 var ADD_SUFFIX_TO_OPTIMIZED_GIF = true;
 var BUTTON_HEIGHT = 50;
 var BUTTON_WIDTH = 100;
 
 // Global Variables
+var SCRIPT_NAME = "gifpt";
 var USER_NAME = $.getenv("USERNAME");
 
 var LAST_UPDATED = (function (dateString) {
@@ -790,7 +789,7 @@ function main() {
             input_type: 'text_input_pair',
             default_value: '-1:-1',
             desc: 'Resolution for the output GIF. Specify as width:height (e.g., 320:240).\n\nUse -1 for width or height to automatically adjust that dimension to maintain the aspect ratio based on the other value.\n\nSetting both to -1 will use the original video’s resolution.',
-            write_to_config: SAVE_SETTINGS,
+            write_to_config: true,
             allow_blank: false,
             fragile: true,
         },
@@ -799,7 +798,7 @@ function main() {
             input_type: 'text_input',
             default_value: '12',
             desc: 'Frame rate of the output GIF.',
-            write_to_config: SAVE_SETTINGS,
+            write_to_config: true,
             allow_blank: false,
             fragile: true,
         },
@@ -808,7 +807,7 @@ function main() {
             input_type: 'text_input',
             default_value: '256',
             desc: 'Maximum number of colors for the GIF. Lower values like 128 can reduce file size but may cause color banding. Values can be set from 1 to 256.',
-            write_to_config: SAVE_SETTINGS,
+            write_to_config: true,
             allow_blank: false,
             fragile: true,
         },
@@ -817,7 +816,7 @@ function main() {
             input_type: 'boolean',
             default_value: 'true',
             desc: 'Whether to generate a custom color palette for each GIF.\nTrue enhances color quality, especially for complex videos.\n\nFalse uses a standard palette, which may reduce quality but speeds up processing.',
-            write_to_config: SAVE_SETTINGS,
+            write_to_config: true,
             allow_blank: false,
             fragile: true,
         },
@@ -826,7 +825,7 @@ function main() {
             input_type: 'text_input',
             default_value: '0',
             desc: 'Number of loops for the GIF playback. Set to 0 for infinite.',
-            write_to_config: SAVE_SETTINGS,
+            write_to_config: true,
             allow_blank: false,
             fragile: true,
         },
@@ -835,7 +834,7 @@ function main() {
             input_type: 'text_input',
             default_value: '1.0',
             desc: 'Playback speed multiplier. Use values over 1.0 to speed up the GIF, and under 1.0 to slow it down.',
-            write_to_config: SAVE_SETTINGS,
+            write_to_config: true,
             allow_blank: false,
             fragile: true,
         },
@@ -844,7 +843,7 @@ function main() {
             input_type: 'text_input',
             default_value: '0',
             desc: 'Time (in seconds) from the beginning of the video to start processing.',
-            write_to_config: SAVE_SETTINGS,
+            write_to_config: true,
             allow_blank: false,
             fragile: true,
         },
@@ -853,7 +852,7 @@ function main() {
             input_type: 'text_input',
             default_value: '',
             desc: 'Duration (in seconds) of the video clip to convert into a GIF.\nLeave blank to convert the entire video.',
-            write_to_config: SAVE_SETTINGS,
+            write_to_config: true,
             allow_blank: true,
             fragile: true,
         },
@@ -862,7 +861,7 @@ function main() {
             input_type: 'text_input',
             default_value: '100',
             desc: 'Level of lossy compression for Gifsicle. Values can be set from 0 to 100.',
-            write_to_config: SAVE_SETTINGS,
+            write_to_config: true,
             allow_blank: false,
             fragile: true,
         },
@@ -871,7 +870,7 @@ function main() {
             input_type: 'radio',
             default_value: 'ordered',
             desc: 'Dithering method for Gifsicle. Options: ordered, floyd-steinberg, ro64, o3, o4, o8, halftone',
-            write_to_config: SAVE_SETTINGS,
+            write_to_config: true,
             allow_blank: false,
             fragile: true,
         }
