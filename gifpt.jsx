@@ -51,7 +51,7 @@ function initializeSetup() {
         accepted_formats: "\\.(mp4|mov|avi)$",
         config_file_path: getConfigPath("config"),
         launched_on: getFormattedTimestamp(6),
-        extras: "Hello world",
+        hello: "world",
 
     };
 
