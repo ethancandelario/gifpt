@@ -690,6 +690,25 @@ function executeFFMPEGCommand(commands, inputFiles, config) {
 //#region Config
 
 /**
+ * Gets the path to the configuration file in the appdata folder.
+ * @returns {string} - The path to the configuration file.
+ */
+function getConfigPath() {
+    var configFolder;
+    if ($.os.indexOf("Mac") !== -1) {
+        configFolder = new Folder(Folder.userData.fsName + "/Application Support/" + SCRIPT_NAME);
+    } else {
+        configFolder = new Folder(Folder.userData.fsName + "/" + SCRIPT_NAME);
+    }
+
+    if (!configFolder.exists) {
+        configFolder.create();
+    }
+
+    return configFolder.fsName + "/config.txt";
+}
+
+/**
  * Initializes the configuration by loading existing settings or prompting the user for new ones.
  * @param {string} filePath - The path to the configuration file.
  * @param {object} configDefinitions - Definitions of config settings.
@@ -922,7 +941,7 @@ function main() {
         }
     };
 
-    configFilePath = File($.fileName).path + "/config.txt";
+    configFilePath = getConfigPath();
     config = initializeConfig(configFilePath, configDefinitions);
 
     if (!config) {
