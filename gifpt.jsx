@@ -20,7 +20,8 @@ var main_logo_binary = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a\x00\x00\x00\x0d\x49\x48
 function initializeSetup() {
 
     // Global Parameter Settings
-    var defaultSetup = {
+    var setup_defaults = {
+
         GENERATE_REPORT: false,
         CLEAN_CONFIG_AT_START: true,
         ADD_SUFFIX_TO_OPTIMIZED_GIF: false,
@@ -38,6 +39,7 @@ function initializeSetup() {
                 return dateString;
             }
         })("24.06.24")
+        
     };
 
     var setupPath = getConfigPath("setup")
@@ -46,7 +48,7 @@ function initializeSetup() {
     if (!setupFile.exists) {
         // If the file doesn't exist, create it and write default values
         setupFile.open('w');
-        setupFile.write(JSON.stringify(defaultSetup, null, 2));
+        setupFile.write(JSON.stringify(setup_defaults, null, 2));
         setupFile.close();
     }
     
