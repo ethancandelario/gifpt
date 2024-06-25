@@ -7,19 +7,23 @@ var main_logo_binary = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a\x00\x00\x00\x0d\x49\x48
 var SCRIPT_NAME = "gifpt";
 
 /**
- * Initializes and configures the script setup a file.
- * If the file does not exist, it creates one.
+ * Initializes and configures the script setup file. If the file does not exist, it creates one.
  * 
  * Global Parameters:
- * - GENERATE_REPORT: boolean - If set to true, the script will log each command it runs.
- * - CLEAN_CONFIG_AT_START: boolean - Determines whether to reset the config when the script starts
- * - ADD_SUFFIX_TO_OPTIMIZED_GIF: boolean - If true, adds a specific suffix to the filename of optimized GIFs.
- * - BUTTON_HEIGHT: number - Specifies the height of UI buttons in pixels.
- * - BUTTON_WIDTH: number - Specifies the width of UI buttons in pixels.
- * - LAST_UPDATED: string - Stores the last update date in a formatted string (YYYY.MM.DD). 
+ * @global {string} USER_NAME - The username retrieved from the environment variables.
+ * @global {boolean} GENERATE_REPORT - If true, the script will log each command it runs, and the response.
+ * @global {boolean} CLEAN_CONFIG_AT_START - Determines whether to reset (or prompt to) the config when the script starts.
+ * @global {boolean} ADD_SUFFIX_TO_OPTIMIZED_GIF - Add a suffix to optimized GIFs. (False will overwrite original GIFS)
+ * @global {number} BUTTON_HEIGHT - Height of UI buttons in pixels.
+ * @global {number} BUTTON_WIDTH - Width of UI buttons in pixels.
+ * @global {string} LAST_UPDATED - Stores the last update date in a formatted string.
+ * @global {string[]} dithering_methods - A list of available dithering methods.
+ * @global {string} accepted_formats - A regex pattern to match acceptable video file formats.
+ * @global {string} script_directory - The directory where the script file is saved.
+ * @global {string} config_file_path - The path of the config file.
  * 
  * Returns:
- * - Object: The configuration settings object loaded or initialized by the function.
+ * @returns {Object} The configuration settings object loaded or initialized by the function.
  */
 function initializeSetup() {
 
@@ -42,12 +46,12 @@ function initializeSetup() {
             else {
                 return dateString;
             }
-        })("24.06.24"),
+        })("24.06.25"),
         dithering_methods: ["ordered", "floyd-steinberg", "ro64", "o3", "o4", "o8", "halftone"],
         accepted_formats: "\\.(mp4|mov|avi)$",
-        script_path: File($.fileName).path,
         config_file_path: getConfigPath("config"),
-        extra: "Hello world!",
+        launched_on: getFormattedTimestamp(6),
+        extras: "Hello world",
 
     };
 
@@ -78,13 +82,12 @@ function initializeSetup() {
     // Return the setup object
     return initializedSetup;
 }
-var setupValues = initializeSetup();
-setupValues;
 
 // Global Variables
 var palettePath, videoInput, outputDirectory, config, configDefinitions;
 var global_progress_window;
 var successMessage = "";
+var setupValues = initializeSetup(); setupValues;
 
 //#endregion
 
@@ -213,6 +216,26 @@ function getFormattedTimestamp(length) {
     }
 
     return units.slice(units.length - length).join('-');
+}
+
+/**
+ * Formats an input path by normalizing path separators and decoding URL encoding.
+ * This ensures the path is compatible across different operating systems used in Adobe environments.
+ *
+ * @param {String} path - The original path string that may contain URL encodings and inconsistent separators.
+ * @returns {String} - A formatted path with consistent separators and decoded characters.
+ */
+function cleanAndFormatPath(path) {
+    // Normalize the path by replacing URL encoded spaces and standardizing path separators
+    var decodedPath = decodeURIComponent(path);
+
+    // Determine the appropriate path separator based on the OS
+    var pathSeparator = $.os.indexOf("Mac") !== -1 ? "/" : "\\";
+
+    // Replace all instances of forward and back slashes with the correct path separator
+    var normalizedPath = decodedPath.replace(/[\/\\]/g, pathSeparator);
+
+    return normalizedPath;
 }
 
 /**
@@ -741,21 +764,21 @@ function executeFFMPEGCommand(commands, inputFiles, config) {
  * @returns {string} - The path to the configuration file.
  */
 function getConfigPath(title) {
-
-    title ? title : "config";
+    title = title || "config";
 
     var configFolder;
     if ($.os.indexOf("Mac") !== -1) {
         configFolder = new Folder(Folder.userData.fsName + "/Application Support/" + SCRIPT_NAME);
     } else {
-        configFolder = new Folder(Folder.userData.fsName + "/" + SCRIPT_NAME);
+        configFolder = new Folder(Folder.userData.fsName + "\\" + SCRIPT_NAME);
     }
 
     if (!configFolder.exists) {
         configFolder.create();
     }
 
-    return configFolder.fsName + "/" + title + ".txt";
+    var pathSeparator = $.os.indexOf("Mac") !== -1 ? "/" : "\\";
+    return configFolder.fsName + pathSeparator + title + ".txt";
 }
 
 /**
@@ -872,7 +895,7 @@ function main() {
     var startTime = new Date().getTime();
 
     // Clean the config file, optionally
-    if (CLEAN_CONFIG_AT_START && config && configDefinitions && config_file_path) {
+    if (CLEAN_CONFIG_AT_START && config && configDefinitions) {
         cleanConfig(config_file_path, config, configDefinitions);
     }
 
@@ -992,7 +1015,6 @@ function main() {
     };
 
     config = initializeConfig(config_file_path, configDefinitions);
-
     if (!config) {
         createPromptWindow(errorText(), "Script initialization failed. Please try again." + "\n", ["OK"], null);
         return;
@@ -1010,7 +1032,7 @@ function main() {
         return;
     }
 
-    // If only one file is selected, still make an array with it
+    // If only one file is selected, create an array with it
     var inputFiles = videoInput instanceof Array ? videoInput : [videoInput];
 
     var commands = buildFFMPEGCommand(config.ffmpegPath, inputFiles, outputDirectory, config);
