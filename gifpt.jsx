@@ -30,7 +30,8 @@ var dithering_methods = ["ordered", "floyd-steinberg", "ro64", "o3", "o4", "o8",
 
 var successMessage = "";
 var global_progress_window;
-var configFilePath, palettePath, videoInput, outputDirectory;
+var configFilePath = getConfigPath();
+var palettePath, videoInput, outputDirectory;
 var config, configDefinitions;
 var accepted_formats = /\.(mp4|mov|avi)$/i;
 
@@ -941,7 +942,6 @@ function main() {
         }
     };
 
-    configFilePath = getConfigPath();
     config = initializeConfig(configFilePath, configDefinitions);
 
     if (!config) {
