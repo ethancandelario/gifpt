@@ -550,7 +550,7 @@ function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
     global_progress_window = createProgressBar(progressWindowTitle, inputFiles.length);
     global_progress_window.window.show();
 
-    var optimizedGIFSuffix = ADD_SUFFIX_TO_OPTIMIZED_GIF ? "optimized" : "";
+    var optimizedGIFSuffix = ADD_SUFFIX_TO_OPTIMIZED_GIF ? "-optimized" : "";
 
     for (var i = 0; i < inputFiles.length; i++) {
 
@@ -558,7 +558,7 @@ function optimizeGIFs(gifsiclePath, outputDirectory, inputFiles, config) {
         global_progress_window.window.updateTitle(newTitle);
 
         var inputFile = inputFiles[i];
-        var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), "-" + optimizedGIFSuffix + ".gif"));
+        var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), optimizedGIFSuffix + ".gif"));
         var inputFilePath = "\"" + outputDirectory + "/" + decodeURIComponent(replaceFileExtension(new File(inputFile), ".gif")) + "\"";
         var outputFilePath = "\"" + outputDirectory + "/" + outputFileName + "\"";
 
