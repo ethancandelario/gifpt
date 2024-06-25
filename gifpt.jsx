@@ -8,27 +8,25 @@ var CLEAN_CONFIG_AT_START = true;
 var ADD_SUFFIX_TO_OPTIMIZED_GIF = true;
 var BUTTON_HEIGHT = 50;
 var BUTTON_WIDTH = 100;
+var LAST_UPDATED = (function (dateString) {
+    var parts = dateString.split(".");
+    if (parts.length === 3) {
+        var day = parts[2].length === 1 ? "0" + parts[2] : parts[2];
+        var month = parts[1].length === 1 ? "0" + parts[1] : parts[1];
+        var year = parts[0].length === 2 ? parts[0] : parts[0].slice(-2);
+
+        return "1." + year + "." + month + "." + day;
+    }
+    else {
+        return dateString;
+    }
+})("24.06.24");
 
 // Global Variables
 var SCRIPT_NAME = "gifpt";
 var USER_NAME = $.getenv("USERNAME");
-
-var LAST_UPDATED = (function (dateString) {
-    var parts = dateString.split(".");
-    if (parts.length === 3) {
-        var day = parts[2];
-        var month = parts[1];
-        var year = parts[0];
-
-        var dayStr = day.length === 1 ? "00" + day : day;
-        var monthStr = month.length === 1 ? "0" + month : month;
-        var yearStr = year.length === 1 ? "0" + year : year;
-
-        return "1." + yearStr + "." + monthStr + "." + dayStr + ".0";
-    } else {
-        return dateString;
-    }
-})("24.06.24");
+var script_path = File($.fileName).path;
+var dithering_methods = ["ordered", "floyd-steinberg", "ro64", "o3", "o4", "o8", "halftone"];
 
 var successMessage = "";
 var global_progress_window;
@@ -220,6 +218,8 @@ function extractFileName(filePath) {
     }
 }
 
+//#region User Interface
+
 /**
  * Displays a custom dialog window for input or selections.
  * @param {string} title - The title of the dialog window.
@@ -229,7 +229,7 @@ function extractFileName(filePath) {
  * @param {string} cancelText - The text for the window's close button.
  * @returns {string|null} - The value entered or chosen by the user, or null if cancelled.
  */
-function createPromptWindow(title, message, choices, defaultValue, cancelText) {
+function createPromptWindow(title, message, choices, defaultValue, cancelText, valueType) {
     var win = new Window("dialog", title, undefined, { resizeable: true });
     win.orientation = "column";
     win.alignChildren = ["fill", "fill"];
@@ -433,8 +433,9 @@ function promptForValue(key, valueType, inputType, defaultValue, description) {
 
     switch (valueType) {
         case 'path':
-            var fileObj = File.openDialog("Please locate: " + key, undefined);
-            return fileObj ? fileObj.fsName : null;
+            var initialPath = defaultValue && new File(defaultValue).exists ? new File(defaultValue) : undefined;
+            var fileObj = File.openDialog("Please locate: " + key, undefined, initialPath);
+            return fileObj ? fileObj.fsName : (defaultValue || null);
         case 'boolean':
             var choices = ["Yes", "No"];
             var result = createPromptWindow("Setup: " + key, promptMessage, choices);
@@ -450,21 +451,23 @@ function promptForValue(key, valueType, inputType, defaultValue, description) {
  */
 function promptForVideoInput() {
 
+    var this_setting_name = SCRIPT_NAME + LAST_UPDATED;
+
     var choices = ["Select File(s)", "Select Folder"];
     var userChoice = createPromptWindow("Setup: videoInput", "Select individual files, or a folder?", choices, null);
 
     if (userChoice === "Select File(s)") {
-        var lastFileDirectory = (app.settings.haveSetting(SCRIPT_NAME, "last_selected_file_folder"))
-            ? app.settings.getSetting(SCRIPT_NAME, "last_selected_file_folder") : null;
+        var lastFileDirectory = (app.settings.haveSetting(this_setting_name, "last_selected_file_folder"))
+            ? app.settings.getSetting(this_setting_name, "last_selected_file_folder") : null;
 
         var videoInput = File.openDialog("Select video file(s) for conversion.", undefined, true, lastFileDirectory ? new Folder(lastFileDirectory) : undefined);
         if (videoInput) {
             if (videoInput instanceof File) {
-                app.settings.saveSetting(SCRIPT_NAME, "last_selected_file_folder", videoInput.parent.fsName);
+                app.settings.saveSetting(this_setting_name, "last_selected_file_folder", videoInput.parent.fsName);
                 return [videoInput.fsName];
             }
             else if (videoInput instanceof Array) {
-                app.settings.saveSetting(SCRIPT_NAME, "last_selected_file_folder", videoInput[0].parent.fsName);
+                app.settings.saveSetting(this_setting_name, "last_selected_file_folder", videoInput[0].parent.fsName);
                 return videoInput.filter(function (file) {
                     return file instanceof File && file.name.match(accepted_formats);
                 }).map(function (file) { return file.fsName; });
@@ -472,12 +475,12 @@ function promptForVideoInput() {
         }
     }
     else if (userChoice === "Select Folder") {
-        var lastDirDirectory = (app.settings.haveSetting(SCRIPT_NAME, "last_selected_dir_folder"))
-            ? app.settings.getSetting(SCRIPT_NAME, "last_selected_dir_folder") : null;
+        var lastDirDirectory = (app.settings.haveSetting(this_setting_name, "last_selected_dir_folder"))
+            ? app.settings.getSetting(this_setting_name, "last_selected_dir_folder") : null;
 
         var videoInputDir = Folder.selectDialog("Select a folder containing video(s) for conversion.", lastDirDirectory ? new Folder(lastDirDirectory) : null);
         if (videoInputDir) {
-            app.settings.saveSetting(SCRIPT_NAME, "last_selected_dir_folder", videoInputDir.fsName);
+            app.settings.saveSetting(this_setting_name, "last_selected_dir_folder", videoInputDir.fsName);
             return videoInputDir.getFiles(function (file) {
                 return file instanceof File && file.name.match(accepted_formats);
             }).map(function (file) { return file.fsName; });
@@ -492,18 +495,25 @@ function promptForVideoInput() {
  * @returns {string|null} - The selected directory or null if none.
  */
 function promptForOutputDirectory() {
-    var lastOutputDirectory = (app.settings.haveSetting(SCRIPT_NAME, "last_selected_output_folder"))
-        ? app.settings.getSetting(SCRIPT_NAME, "last_selected_output_folder") : null;
+
+    var this_setting_name = SCRIPT_NAME + LAST_UPDATED;
+
+    var lastOutputDirectory = (app.settings.haveSetting(this_setting_name, "last_selected_output_folder"))
+        ? app.settings.getSetting(this_setting_name, "last_selected_output_folder") : null;
 
     var outputDirectory = Folder.selectDialog("Select a directory to save the output GIFs.", lastOutputDirectory ? new Folder(lastOutputDirectory) : null);
     if (outputDirectory) {
-        app.settings.saveSetting(SCRIPT_NAME, "last_selected_output_folder", outputDirectory.fsName);
+        app.settings.saveSetting(this_setting_name, "last_selected_output_folder", outputDirectory.fsName);
         return outputDirectory.fsName;
     }
     else {
         return null;
     }
 }
+
+//#endregion
+
+//#region Command Assembly
 
 /**
  * Optimizes the output GIFs using Gifsicle.
@@ -567,30 +577,44 @@ function buildFFMPEGCommand(ffmpegPath, inputFiles, outputDirectory, config) {
     var commands = [];
 
     for (var i = 0; i < inputFiles.length; i++) {
+
         var inputFile = inputFiles[i];
+
         var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), ".gif"));
+
         var outputFilePath = outputDirectory + "/" + outputFileName;
+
         var startTime = config.startTime ? "-ss " + config.startTime : "";
+
         var duration = config.duration ? "-t " + config.duration : "";
+
         var playbackSpeed = config.playbackSpeed ? "setpts=" + (1 / parseFloat(config.playbackSpeed)) + "*PTS" : "";
 
-        // If 'config.numColors' is greater than 256, the number of colors is capped at 256 to prevent using more than 256 colors.
-        // If 'config.numColors' is not defined or is undefined, the default value of 256 colors is used.
         var numColors = config.numColors ? (config.numColors > 256 ? 256 : config.numColors) : "256";
 
         inputFile = "\"" + inputFile + "\"";
-        palettePath = "\"" + outputDirectory + "/palette.png\"";
+        palettePath = "\"" + outputDirectory + "\\palette.png\"";
         outputFilePath = "\"" + outputFilePath + "\"";
 
         if (config.gifPaletteGen === 'true') {
-            var paletteGenCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -vf \"palettegen=max_colors=" + numColors + "\" " + palettePath;
-            var paletteUseCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -i " + palettePath + " -filter_complex \"[0:v]" + playbackSpeed + ",fps=" + config.gifFps + ",scale=" + config.gifScale + " [x];[x][1:v] paletteuse\" -loop " + config.gifLoopCount + " " + outputFilePath + " " + duration;
+            var paletteGenCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile +
+                " -vf \"fps=" + config.gifFps + ",scale=" + config.gifScale +
+                ",palettegen=max_colors=" + numColors + "\" " +
+                "-frames:v 1 -update 1 " + palettePath;
+            var paletteUseCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -i " + palettePath +
+                " -filter_complex \"[0:v]" + playbackSpeed + ",fps=" + config.gifFps +
+                ",scale=" + config.gifScale + "[x];[x][1:v]paletteuse\" " +
+                "-loop " + config.gifLoopCount + " " + outputFilePath + " " + duration;
 
             commands.push(paletteGenCmd);
             commands.push(paletteUseCmd);
-        } else {
-            var filter = "fps=" + config.gifFps + ",scale=" + config.gifScale + ",split[x][z];[z]palettegen=max_colors=" + numColors + "[p];[x][p]paletteuse";
-            var command = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -vf \"" + playbackSpeed + "," + filter + "\" -loop " + config.gifLoopCount + " " + outputFilePath + " " + duration;
+        }
+        else {
+            var filter = "fps=" + config.gifFps + ",scale=" + config.gifScale +
+                ",split[x][z];[z]palettegen=max_colors=" + numColors + "[p];[x][p]paletteuse";
+            var command = ffmpegPath + " -y " + startTime + " -i " + inputFile +
+                " -filter_complex \"" + playbackSpeed + "," + filter + "\" " +
+                "-loop " + config.gifLoopCount + " " + outputFilePath + " " + duration;
             commands.push(command);
         }
     }
@@ -646,6 +670,10 @@ function executeFFMPEGCommand(commands, inputFiles, config) {
     }
 }
 
+//#endregion
+
+//#region Config
+
 /**
  * Initializes the configuration by loading existing settings or prompting the user for new ones.
  * @param {string} filePath - The path to the configuration file.
@@ -700,16 +728,14 @@ function loadConfig(filePath) {
     var config = {};
     if (configFile.exists) {
         configFile.open('r');
-        while (!configFile.eof) {
-            var line = configFile.readln();
-            var parts = line.split(',');
-            if (parts.length == 2) {
-                var key = cleanSpaces(parts[0]);
-                var value = cleanSpaces(parts[1]);
-                config[key] = value;
-            }
-        }
+        var content = configFile.read();
         configFile.close();
+        try {
+            config = JSON.parse(content);
+        } catch (e) {
+            // If parsing fails, return an empty object
+            config = {};
+        }
     }
     return config;
 }
@@ -722,15 +748,17 @@ function loadConfig(filePath) {
  */
 function saveConfig(filePath, config, configDefinitions) {
     var configFile = new File(filePath);
-    configFile.open('w');
+    var configToSave = {};
     for (var key in config) {
         if (config.hasOwnProperty(key) && configDefinitions[key].write_to_config) {
-            configFile.writeln(key + ',' + config[key]);
+            configToSave[key] = config[key];
         }
     }
+    var jsonString = JSON.stringify(configToSave, null, 2);
+    configFile.open('w');
+    configFile.write(jsonString);
     configFile.close();
 }
-
 /**
  * Clears fragile values from the configuration settings if the user confirms.
  * @param {string} filePath - The path to the configuration file.
@@ -750,6 +778,9 @@ function cleanConfig(filePath, config, configDefinitions) {
     }
 }
 
+//#endregion
+
+//#region Main
 /**
  * Main function to handle user interactions and processing.
  */
@@ -761,7 +792,7 @@ function main() {
         cleanConfig(configFilePath, config, configDefinitions);
     }
 
-    // Startup screen
+    // Start screen
     createLogoWindow(SCRIPT_NAME + " v" + LAST_UPDATED, "", null, "Make some gifs!", main_logo_binary,);
 
     // GIF Conversion Parameters
@@ -930,3 +961,5 @@ if (successMessage) {
     global_progress_window.window.update();
     global_progress_window.window.seppuku();
 }
+
+//#endregion
