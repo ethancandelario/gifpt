@@ -5,7 +5,7 @@ var main_logo_binary = "\x89\x50\x4e\x47\x0d\x0a\x1a\x0a\x00\x00\x00\x0d\x49\x48
 // Parameters
 var GENERATE_REPORT = false;
 var CLEAN_CONFIG_AT_START = true;
-var ADD_SUFFIX_TO_OPTIMIZED_GIF = true;
+var ADD_SUFFIX_TO_OPTIMIZED_GIF = false;
 var BUTTON_HEIGHT = 50;
 var BUTTON_WIDTH = 100;
 var LAST_UPDATED = (function (dateString) {
