@@ -248,15 +248,18 @@ function createBasePromptWindow(title, message) {
  * @param {string} message - The message to be displayed.
  * @param {string[]} choices - An array of string choices for buttons (null if text input is needed).
  * @param {string} defaultValue - Default text value if applicable.
- * @param {string} cancelText - The text for the window's close button.
+ * @param {string} actionButtonText - The text for the window's action button.
  * @returns {string|null} - The value entered or chosen by the user, or null if cancelled.
  */
-function createPromptWindow(title, message, choices, defaultValue, cancelText, valueType) {
-    
+function createPromptWindow(title, message, choices, defaultValue, actionButtonText, valueType) {
+
+    // Create a base window for building the prompt
     var win = createBasePromptWindow(title, message);
 
+    // Create a variable to store the user's input
     var input = null;
 
+    // TODO Replace if block with case statements based on value type
     if (choices) {
         var buttonGroup = win.add("group");
         buttonGroup.orientation = "row";
@@ -290,7 +293,7 @@ function createPromptWindow(title, message, choices, defaultValue, cancelText, v
     actionGroup.orientation = "row";
     actionGroup.alignChildren = ["fill", "center"];
 
-    var cancelButton = actionGroup.add("button", undefined, cancelText ? cancelText : "Cancel");
+    var cancelButton = actionGroup.add("button", undefined, actionButtonText ? actionButtonText : "Cancel");
     cancelButton.preferredSize = [BUTTON_WIDTH, BUTTON_HEIGHT];
     cancelButton.onClick = function () {
         win.close();
