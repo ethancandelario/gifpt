@@ -132,10 +132,10 @@ function processingPhrase() {
 
 /**
  * Generates a timestamp formatted as a string.
- * @param {number} precision - The number of time units to include (1-6).
+ * @param {number} length - The complexity of the output string.
  * @returns {string} - The formatted timestamp.
  */
-function getFormattedTimestamp(precision) {
+function getFormattedTimestamp(length) {
     var now = new Date();
     var units = [
         now.getFullYear(),
@@ -146,14 +146,13 @@ function getFormattedTimestamp(precision) {
         ('0' + now.getSeconds()).slice(-2)
     ];
 
-    // Handle undefined or invalid length
-    if (typeof precision === 'undefined' || isNaN(precision) || precision < 1 || precision > units.length) {
-        precision = units.length;
+    if (typeof length === 'undefined' || isNaN(length) || length < 1 || length > units.length) {
+        length = units.length;
     } else {
-        precision = Math.floor(precision);
+        length = Math.floor(length);
     }
 
-    return units.slice(units.length - precision).join('-');
+    return units.slice(units.length - length).join('-');
 }
 
 /**
