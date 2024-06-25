@@ -220,15 +220,12 @@ function extractFileName(filePath) {
 //#region User Interface
 
 /**
- * Displays a custom dialog window for input or selections.
+ * Creates a base prompt window with common properties.
  * @param {string} title - The title of the dialog window.
  * @param {string} message - The message to be displayed.
- * @param {string[]} choices - An array of string choices for buttons (null if text input is needed).
- * @param {string} defaultValue - Default text value if applicable.
- * @param {string} cancelText - The text for the window's close button.
- * @returns {string|null} - The value entered or chosen by the user, or null if cancelled.
+ * @returns {Window} - The created window object.
  */
-function createPromptWindow(title, message, choices, defaultValue, cancelText, valueType) {
+function createBasePromptWindow(title, message) {
     var win = new Window("dialog", title, undefined, { resizeable: true });
     win.orientation = "column";
     win.alignChildren = ["fill", "fill"];
@@ -241,6 +238,22 @@ function createPromptWindow(title, message, choices, defaultValue, cancelText, v
     };
 
     var messageText = win.add("statictext", undefined, message, { multiline: true });
+
+    return win;
+}
+
+/**
+ * Displays a custom dialog window for input or selections.
+ * @param {string} title - The title of the dialog window.
+ * @param {string} message - The message to be displayed.
+ * @param {string[]} choices - An array of string choices for buttons (null if text input is needed).
+ * @param {string} defaultValue - Default text value if applicable.
+ * @param {string} cancelText - The text for the window's close button.
+ * @returns {string|null} - The value entered or chosen by the user, or null if cancelled.
+ */
+function createPromptWindow(title, message, choices, defaultValue, cancelText, valueType) {
+    
+    var win = createBasePromptWindow(title, message);
 
     var input = null;
 
