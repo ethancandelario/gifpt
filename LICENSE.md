@@ -1,4 +1,4 @@
-Copyright (c) 2024 Ethan Candelario
+Copyright (c) 2025
 
 This license applies only to gifpt. It does not cover the included third-party software, which is governed by their own separate licenses.
 
