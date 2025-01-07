@@ -1,5 +1,3 @@
-Copyright (c) 2025
-
 This license applies only to gifpt. It does not cover the included third-party software, which is governed by their own separate licenses.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
