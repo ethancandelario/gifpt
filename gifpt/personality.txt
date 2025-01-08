@@ -115,7 +115,7 @@
         "Softly cursing",
         "Mildly concerned about",
         "Slightly overthinking",
-        "(Loading)",
+        "Loading",
         "Scheming over",
         "Tweaking",
         "Finessing",
