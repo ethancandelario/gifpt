@@ -1,6 +1,6 @@
 # gifpt
 
-A simple FFmpeg GIF converter for Adobe After Effects.
+A GIF creation tool for Adobe After Effects with FFmpeg and Gifsicle.
 
 
 
