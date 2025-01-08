@@ -10,9 +10,11 @@ A GIF creation tool for Adobe After Effects with FFmpeg and Gifsicle.
 
 * Clone this repo. If you download gifpt from a release build, you'll need to download FFmpeg separately.
 
-* Create a shortcut to "gifpt.jsx" and gifpt's resources folder, "gifpt", within "C:\Users\yourname\AppData\Roaming\Adobe\After Effects\yourversion\Scripts\ScriptUI Panels".
+* Copy or create a shortcut to "gifpt.jsx" and gifpt's resources folder, "gifpt", within "C:\Users\yourname\AppData\Roaming\Adobe\After Effects\yourversion\Scripts\ScriptUI Panels".
 
 * Restart After Effects and launch gifpt. (Menu Bar > Window > gifpt.jsx)
+
+* Start making some GIFs!
 
 ### Mac
 
