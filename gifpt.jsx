@@ -1601,150 +1601,162 @@ function gifpt(thisObj) {
     //#endregion
 
     //#region FFmpeg/Gifsicle Utilities
-    /**
-     * Builds FFMPEG command lines for converting videos to GIFs based on user config.
-     * @param {Array} inputFiles - The input video files.
-     * @param {string} outputDirectory - The directory where the output GIFs should be saved.
-     * @param {object} config - User-configured settings.
-     * @returns {Array} - The FFMPEG commands.
-     */
-    function buildFFMPEGCommand(inputFiles, outputDirectory, config) {
-        var commands = [];
-        var tempFolderName = SCRIPT_NAME + "_workshop";
+/**
+ * Builds FFMPEG command lines for converting videos to GIFs based on user config.
+ * @param {Array} inputFiles - The input video files.
+ * @param {string} outputDirectory - The directory where the output GIFs should be saved.
+ * @param {object} config - User-configured settings.
+ * @returns {Array} - The FFMPEG commands.
+ */
+function buildFFMPEGCommand(inputFiles, outputDirectory, config) {
+    var commands = [];
+    var tempFolderName = SCRIPT_NAME + "_workshop";
 
-        // config.delayFrames = [
-        //     [1, 2],
-        // ];
+    // config.delayFrames = [
+    //     [3, 5],  
+    // ];
 
-        // Ensure delayFrames is properly structured as [[frame, delay], ...]
-        config.delayFrames = config.delayFrames || [[0, 1]]; // Default to no change in delay
-        if (!config.delayFrames[0] || !config.delayFrames[0].length) {
-            // Convert legacy format to new format
-            var newDelayFrames = [];
-            for (var d = 0; d < config.delayFrames.length; d++) {
-                newDelayFrames.push([d, config.delayFrames[d]]);
-            }
-            config.delayFrames = newDelayFrames;
+    // Ensure delayFrames is properly structured as [[frame, delay], ...]
+    config.delayFrames = config.delayFrames || [[0, 1]]; // Default to no change in delay
+    if (!config.delayFrames[0] || !config.delayFrames[0].length) {
+        // Convert legacy format to new format
+        var newDelayFrames = [];
+        for (var d = 0; d < config.delayFrames.length; d++) {
+            newDelayFrames.push([d, config.delayFrames[d]]);
         }
-
-        for (var i = 0; i < inputFiles.length; i++) {
-            var inputFile = inputFiles[i];
-            var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), ".gif"));
-            global_current_file = decodeURIComponent(replaceFileExtension(new File(inputFile), ""));
-            var ffmpegPath = formatPathQuotes(config.ffmpegPath);
-            var outputFilePath = outputDirectory + SYSTEM_SEPARATOR + outputFileName;
-            var startTime = config.startTime ? "-ss " + config.startTime : "";
-            var duration = config.duration ? "-t " + config.duration : "";
-            var playbackSpeed = config.playbackSpeed ? "setpts=" + (1 / parseFloat(config.playbackSpeed)) + "*PTS" : "";
-            var numColors = config.numColors ? (config.numColors > 256 ? 256 : config.numColors) : "256";
-            var numLoops = (config.gifLoopCount === "" || config.gifLoopCount === " " || config.gifLoopCount === "0") ? "0" : config.gifLoopCount;
-
-            inputFile = formatPathQuotes(inputFile);
-            outputFilePath = formatPathQuotes(outputFilePath);
-
-            // Handle frame delays
-            if (config.delayFrames && config.delayFrames.length > 0) {
-                // Create temp directory
-                var tempDir = new Folder(outputDirectory + SYSTEM_SEPARATOR + tempFolderName);
-                if (!tempDir.exists) {
-                    tempDir.create();
-                }
-
-                // Step 1: Extract frames
-                var extractCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " " + duration +
-                    " -vsync 1" +
-                    " -vf \"" + (playbackSpeed ? playbackSpeed + "," : "") + "fps=" + config.gifFps + "\" " +
-                    formatPathQuotes(tempDir.fsName + SYSTEM_SEPARATOR + "frame_%04d.png");
-                commands.push(extractCmd);
-
-                // Create concat file
-                var concatFilePath = tempDir.fsName + SYSTEM_SEPARATOR + "concat.txt";
-                var scriptPath = tempDir.fsName + SYSTEM_SEPARATOR + "generate_concat.bat";
-                var scriptFile = new File(scriptPath);
-                scriptFile.encoding = "UTF8";
-                scriptFile.open("w");
-
-                scriptFile.writeln("@echo off");
-                scriptFile.writeln("setlocal enabledelayedexpansion");
-                scriptFile.writeln("set count=0");
-                scriptFile.writeln("for %%F in (\"" + tempDir.fsName + SYSTEM_SEPARATOR + "frame_*.png\") do set /a count+=1");
-                scriptFile.writeln("set frame=1");
-
-                // Write frame paths and delays
-                scriptFile.writeln("for %%F in (\"" + tempDir.fsName + SYSTEM_SEPARATOR + "frame_*.png\") do (");
-                scriptFile.writeln("  echo file '%%F' >> \"" + concatFilePath + "\"");
-                scriptFile.writeln("  set /a idx=frame-1");
-
-                // Build the delay conditions with new frame-delay pair structure
-                var delayConditions = "";
-                for (var j = 0; j < config.delayFrames.length; j++) {
-                    var frameIndex = config.delayFrames[j][0];
-                    var delayFactor = config.delayFrames[j][1];
-                    if (j > 0) delayConditions += " else ";
-                    delayConditions += "if !idx!==" + frameIndex + " (echo duration " +
-                        (1 / config.gifFps * delayFactor) + " >> \"" + concatFilePath + "\")";
-                }
-
-                // Add default case for frames without specific delays
-                if (config.delayFrames.length > 0) {
-                    delayConditions += " else (echo duration " + (1 / config.gifFps) + " >> \"" + concatFilePath + "\")";
-                }
-
-                scriptFile.writeln("  if !frame! lss !count! (");
-                scriptFile.writeln("    " + delayConditions);
-                scriptFile.writeln("  )");
-                scriptFile.writeln("  set /a frame+=1");
-                scriptFile.writeln(")");
-                scriptFile.close();
-
-                // Execute script to generate concat file
-                commands.push("cmd /c \"" + scriptPath + "\"");
-
-                // Create palette
-                var palettePath = formatPathQuotes(tempDir.fsName + SYSTEM_SEPARATOR + "palette.png");
-                var paletteCmd = ffmpegPath + " -y -f concat -safe 0 -i " + formatPathQuotes(concatFilePath) +
-                    " -vf palettegen=max_colors=" + numColors + " " + palettePath;
-                commands.push(paletteCmd);
-
-                // Create final GIF
-                var gifCmd = ffmpegPath + " -y -f concat -safe 0 -i " + formatPathQuotes(concatFilePath) +
-                    " -i " + palettePath +
-                    " -lavfi \"[0:v][1:v]paletteuse=dither=none\" " +
-                    " -loop " + numLoops + " " + outputFilePath;
-                commands.push(gifCmd);
-
-                // Cleanup
-                commands.push("cmd /c del " + formatPathQuotes(scriptPath));
-                commands.push("cmd /c rmdir /s /q " + formatPathQuotes(tempDir.fsName));
-            }
-            // Original command structure if no frame delays specified
-            else {
-                if (config.gifPaletteGen === 'true') {
-                    var palettePath = formatPathQuotes(outputDirectory + SYSTEM_SEPARATOR + "palette.png");
-                    var paletteGenCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile +
-                        " -vf \"fps=" + config.gifFps + ",scale=" + config.gifScale +
-                        ",palettegen=max_colors=" + numColors + "\" " +
-                        "-frames:v 1 -update 1 " + palettePath;
-                    var paletteUseCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -i " + palettePath +
-                        " -filter_complex \"[0:v]" + playbackSpeed + ",fps=" + config.gifFps +
-                        ",scale=" + config.gifScale + "[x];[x][1:v]paletteuse\" " +
-                        "-loop " + numLoops + " " + outputFilePath + " " + duration;
-                    commands.push(paletteGenCmd);
-                    commands.push(paletteUseCmd);
-                }
-                else {
-                    var filter = "fps=" + config.gifFps + ",scale=" + config.gifScale +
-                        ",split[x][z];[z]palettegen=max_colors=" + numColors + "[p];[x][p]paletteuse";
-                    var command = ffmpegPath + " -y " + startTime + " -i " + inputFile +
-                        " -filter_complex \"" + playbackSpeed + "," + filter + "\" " +
-                        "-loop " + numLoops + " " + outputFilePath + " " + duration;
-                    commands.push(command);
-                }
-            }
-        }
-
-        return commands;
+        config.delayFrames = newDelayFrames;
     }
+
+    for (var i = 0; i < inputFiles.length; i++) {
+        var inputFile = inputFiles[i];
+        var outputFileName = decodeURIComponent(replaceFileExtension(new File(inputFile), ".gif"));
+        global_current_file = decodeURIComponent(replaceFileExtension(new File(inputFile), ""));
+        var ffmpegPath = formatPathQuotes(config.ffmpegPath);
+        var outputFilePath = outputDirectory + SYSTEM_SEPARATOR + outputFileName;
+        var startTime = config.startTime ? "-ss " + config.startTime : "";
+        var duration = config.duration ? "-t " + config.duration : "";
+        var playbackSpeed = config.playbackSpeed ? "setpts=" + (1 / parseFloat(config.playbackSpeed)) + "*PTS" : "";
+        var numColors = config.numColors ? (config.numColors > 256 ? 256 : config.numColors) : "256";
+        var numLoops = (config.gifLoopCount === "" || config.gifLoopCount === " " || config.gifLoopCount === "0") ? "0" : config.gifLoopCount;
+
+        inputFile = formatPathQuotes(inputFile);
+        outputFilePath = formatPathQuotes(outputFilePath);
+
+        // Handle frame delays
+        if (config.delayFrames && config.delayFrames.length > 0) {
+            // Create temp directory
+            var tempDir = new Folder(outputDirectory + SYSTEM_SEPARATOR + tempFolderName);
+            if (!tempDir.exists) {
+                tempDir.create();
+            }
+
+            // Step 1: Extract frames
+            var extractCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " " + duration +
+                " -vsync 1" +
+                " -vf \"" + (playbackSpeed ? playbackSpeed + "," : "") + "fps=" + config.gifFps + "\" " +
+                formatPathQuotes(tempDir.fsName + SYSTEM_SEPARATOR + "frame_%04d.png");
+            commands.push(extractCmd);
+
+            // Create concat file
+            var concatFilePath = tempDir.fsName + SYSTEM_SEPARATOR + "concat.txt";
+            var scriptPath = tempDir.fsName + SYSTEM_SEPARATOR + "generate_concat.bat";
+            var scriptFile = new File(scriptPath);
+            scriptFile.encoding = "UTF8";
+            scriptFile.open("w");
+
+            scriptFile.writeln("@echo off");
+            scriptFile.writeln("setlocal enabledelayedexpansion");
+            scriptFile.writeln("set count=0");
+            scriptFile.writeln("for %%F in (\"" + tempDir.fsName + SYSTEM_SEPARATOR + "frame_*.png\") do set /a count+=1");
+            scriptFile.writeln("set frame=1");
+
+            // Write frame paths and delays
+            scriptFile.writeln("for %%F in (\"" + tempDir.fsName + SYSTEM_SEPARATOR + "frame_*.png\") do (");
+            scriptFile.writeln("  echo file '%%F' >> \"" + concatFilePath + "\"");
+            
+            // Only write duration for frames that have a next frame
+            scriptFile.writeln("  if !frame! lss !count! (");
+            scriptFile.writeln("    set /a idx=frame-1");
+            
+            // Build the delay conditions
+            var delayConditions = "";
+            for (var j = 0; j < config.delayFrames.length; j++) {
+                var frameIndex = config.delayFrames[j][0];
+                var delayFactor = config.delayFrames[j][1];
+                if (j > 0) delayConditions += " else ";
+                delayConditions += "if !idx!==" + frameIndex + " (echo duration " +
+                    (1 / config.gifFps * delayFactor) + " >> \"" + concatFilePath + "\")";
+            }
+
+            // Add default case for frames without specific delays
+            if (config.delayFrames.length > 0) {
+                delayConditions += " else (echo duration " + (1 / config.gifFps) + " >> \"" + concatFilePath + "\")";
+            } else {
+                delayConditions = "echo duration " + (1 / config.gifFps) + " >> \"" + concatFilePath + "\"";
+            }
+
+            scriptFile.writeln("    " + delayConditions);
+            scriptFile.writeln("  )");
+            
+            // For the last frame, duplicate it and add a duration
+            scriptFile.writeln("  if !frame!==!count! (");
+            scriptFile.writeln("    echo file '%%F' >> \"" + concatFilePath + "\"");  // Duplicate last frame
+            scriptFile.writeln("    set /a idx=frame-1");
+            scriptFile.writeln("    " + delayConditions);  // Add duration for the duplicated frame
+            scriptFile.writeln("  )");
+            
+            scriptFile.writeln("  set /a frame+=1");
+            scriptFile.writeln(")");
+            scriptFile.close();
+
+            // Execute script to generate concat file
+            commands.push("cmd /c \"" + scriptPath + "\"");
+
+            // Create palette
+            var palettePath = formatPathQuotes(tempDir.fsName + SYSTEM_SEPARATOR + "palette.png");
+            var paletteCmd = ffmpegPath + " -y -f concat -safe 0 -i " + formatPathQuotes(concatFilePath) +
+                " -vf palettegen=max_colors=" + numColors + " " + palettePath;
+            commands.push(paletteCmd);
+
+            // Create final GIF
+            var gifCmd = ffmpegPath + " -y -f concat -safe 0 -i " + formatPathQuotes(concatFilePath) +
+                " -i " + palettePath +
+                " -lavfi \"[0:v][1:v]paletteuse=dither=none\" " +
+                " -loop " + numLoops + " " + outputFilePath;
+            commands.push(gifCmd);
+
+            // Cleanup
+            commands.push("cmd /c del " + formatPathQuotes(scriptPath));
+            commands.push("cmd /c rmdir /s /q " + formatPathQuotes(tempDir.fsName));
+        }
+        // Original command structure if no frame delays specified
+        else {
+            if (config.gifPaletteGen === 'true') {
+                var palettePath = formatPathQuotes(outputDirectory + SYSTEM_SEPARATOR + "palette.png");
+                var paletteGenCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile +
+                    " -vf \"fps=" + config.gifFps + ",scale=" + config.gifScale +
+                    ",palettegen=max_colors=" + numColors + "\" " +
+                    "-frames:v 1 -update 1 " + palettePath;
+                var paletteUseCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " -i " + palettePath +
+                    " -filter_complex \"[0:v]" + playbackSpeed + ",fps=" + config.gifFps +
+                    ",scale=" + config.gifScale + "[x];[x][1:v]paletteuse\" " +
+                    "-loop " + numLoops + " " + outputFilePath + " " + duration;
+                commands.push(paletteGenCmd);
+                commands.push(paletteUseCmd);
+            }
+            else {
+                var filter = "fps=" + config.gifFps + ",scale=" + config.gifScale +
+                    ",split[x][z];[z]palettegen=max_colors=" + numColors + "[p];[x][p]paletteuse";
+                var command = ffmpegPath + " -y " + startTime + " -i " + inputFile +
+                    " -filter_complex \"" + playbackSpeed + "," + filter + "\" " +
+                    "-loop " + numLoops + " " + outputFilePath + " " + duration;
+                commands.push(command);
+            }
+        }
+    }
+
+    return commands;
+}
 
     /**
      * Executes the provided FFMPEG commands.
