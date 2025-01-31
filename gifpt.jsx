@@ -1610,11 +1610,22 @@ function gifpt(thisObj) {
      */
     function buildFFMPEGCommand(inputFiles, outputDirectory, config) {
         var commands = [];
-
-        // TODO: Delay works, but only after GIF plays once normally. Can this be fixed?
-        // TODO: Delay command should be structured as similarly to original as possible.
-
         var tempFolderName = SCRIPT_NAME + "_workshop";
+
+        // config.delayFrames = [
+        //     [1, 2],
+        // ];
+
+        // Ensure delayFrames is properly structured as [[frame, delay], ...]
+        config.delayFrames = config.delayFrames || [[0, 1]]; // Default to no change in delay
+        if (!config.delayFrames[0] || !config.delayFrames[0].length) {
+            // Convert legacy format to new format
+            var newDelayFrames = [];
+            for (var d = 0; d < config.delayFrames.length; d++) {
+                newDelayFrames.push([d, config.delayFrames[d]]);
+            }
+            config.delayFrames = newDelayFrames;
+        }
 
         for (var i = 0; i < inputFiles.length; i++) {
             var inputFile = inputFiles[i];
@@ -1639,23 +1650,15 @@ function gifpt(thisObj) {
                     tempDir.create();
                 }
 
-                // Step 1: Extract frames - maintain original fps
+                // Step 1: Extract frames
                 var extractCmd = ffmpegPath + " -y " + startTime + " -i " + inputFile + " " + duration +
-                    " -vsync 1" +  // Changed to 1 for better frame timing
+                    " -vsync 1" +
                     " -vf \"" + (playbackSpeed ? playbackSpeed + "," : "") + "fps=" + config.gifFps + "\" " +
                     formatPathQuotes(tempDir.fsName + SYSTEM_SEPARATOR + "frame_%04d.png");
                 commands.push(extractCmd);
 
                 // Create concat file
                 var concatFilePath = tempDir.fsName + SYSTEM_SEPARATOR + "concat.txt";
-                var concatFile = new File(concatFilePath);
-                concatFile.encoding = "UTF8";
-                concatFile.open("w");
-
-                // Calculate default frame duration based on fps
-                var defaultDelay = 1 / parseFloat(config.gifFps);
-
-                // Write header for shell script to generate concat file
                 var scriptPath = tempDir.fsName + SYSTEM_SEPARATOR + "generate_concat.bat";
                 var scriptFile = new File(scriptPath);
                 scriptFile.encoding = "UTF8";
@@ -1666,12 +1669,29 @@ function gifpt(thisObj) {
                 scriptFile.writeln("set count=0");
                 scriptFile.writeln("for %%F in (\"" + tempDir.fsName + SYSTEM_SEPARATOR + "frame_*.png\") do set /a count+=1");
                 scriptFile.writeln("set frame=1");
+
+                // Write frame paths and delays
                 scriptFile.writeln("for %%F in (\"" + tempDir.fsName + SYSTEM_SEPARATOR + "frame_*.png\") do (");
                 scriptFile.writeln("  echo file '%%F' >> \"" + concatFilePath + "\"");
-                scriptFile.writeln("  if !frame!==1 (");
-                scriptFile.writeln("    echo duration " + config.delayFrames[0] + " >> \"" + concatFilePath + "\"");
-                scriptFile.writeln("  ) else (");
-                scriptFile.writeln("    if !frame! lss !count! echo duration " + defaultDelay + " >> \"" + concatFilePath + "\"");
+                scriptFile.writeln("  set /a idx=frame-1");
+
+                // Build the delay conditions with new frame-delay pair structure
+                var delayConditions = "";
+                for (var j = 0; j < config.delayFrames.length; j++) {
+                    var frameIndex = config.delayFrames[j][0];
+                    var delayFactor = config.delayFrames[j][1];
+                    if (j > 0) delayConditions += " else ";
+                    delayConditions += "if !idx!==" + frameIndex + " (echo duration " +
+                        (1 / config.gifFps * delayFactor) + " >> \"" + concatFilePath + "\")";
+                }
+
+                // Add default case for frames without specific delays
+                if (config.delayFrames.length > 0) {
+                    delayConditions += " else (echo duration " + (1 / config.gifFps) + " >> \"" + concatFilePath + "\")";
+                }
+
+                scriptFile.writeln("  if !frame! lss !count! (");
+                scriptFile.writeln("    " + delayConditions);
                 scriptFile.writeln("  )");
                 scriptFile.writeln("  set /a frame+=1");
                 scriptFile.writeln(")");
@@ -1689,7 +1709,7 @@ function gifpt(thisObj) {
                 // Create final GIF
                 var gifCmd = ffmpegPath + " -y -f concat -safe 0 -i " + formatPathQuotes(concatFilePath) +
                     " -i " + palettePath +
-                    " -lavfi \"[0:v][1:v]paletteuse=dither=none\" " +  // Removed dithering for text
+                    " -lavfi \"[0:v][1:v]paletteuse=dither=none\" " +
                     " -loop " + numLoops + " " + outputFilePath;
                 commands.push(gifCmd);
 
